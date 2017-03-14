@@ -238,7 +238,7 @@ public class PollerResourceAuthTest {
 
     private class TestDatastoreClient extends DataStoreClient {
         TestDatastoreClient() {
-            super(null, new EmoPollerConfiguration.EmoConfiguration(null, ""));
+            super(null, new EmoPollerConfiguration.EmoConfiguration(null, "", "", ""));
         }
 
         @Override public void updateTable(final String table, final TableOptions options, final JsonNode template, final Audit audit, final String apiKey) {
@@ -285,7 +285,7 @@ public class PollerResourceAuthTest {
     private class TestDataBusClient extends DataBusClient {
 
         public TestDataBusClient() {
-            super(null, new EmoPollerConfiguration.EmoConfiguration(null, ""), null);
+            super(null, new EmoPollerConfiguration.EmoConfiguration(null, "", "", ""), null);
         }
 
         @Override public JsonNode subscribe(final String subscriptionName, final Condition condition, final Duration subscriptionTTL, final Duration eventTTL, final String apiKey) {
@@ -327,7 +327,7 @@ public class PollerResourceAuthTest {
 
     private class TestLambdaSubscriptionManager extends LambdaSubscriptionManager {
         TestLambdaSubscriptionManager(final ApiKeyCrypto apiKeyCrypto) {
-            super(null, null, new EmoPollerConfiguration.EmoConfiguration("", ""), null, null, apiKeyCrypto, null);
+            super(null, null, new EmoPollerConfiguration.EmoConfiguration("", "", "", ""), null, null, apiKeyCrypto, null);
         }
 
         @Override public void register(final String lambdaArn, final Condition condition, final Duration claimTtl, final Integer batchSize, final String delegateApiKey)

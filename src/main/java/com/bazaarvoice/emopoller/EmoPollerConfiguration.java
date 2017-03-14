@@ -35,10 +35,17 @@ public class EmoPollerConfiguration extends Configuration {
     public static class EmoConfiguration {
         private final String apiKey;
         private final String baseURL;
+        private final String subscriptionTable;
+        private final String subscriptionPrefix;
 
-        public EmoConfiguration(@JsonProperty("apiKey") final String apiKey, @JsonProperty("baseURL") final String baseURL) {
+        public EmoConfiguration(@JsonProperty("apiKey") final String apiKey,
+                                @JsonProperty("baseURL") final String baseURL,
+                                @JsonProperty("subscriptionTable") final String subscriptionTable,
+                                @JsonProperty("subscriptionPrefix") final String subscriptionPrefix) {
             this.apiKey = apiKey;
             this.baseURL = baseURL;
+            this.subscriptionTable = subscriptionTable;
+            this.subscriptionPrefix = subscriptionPrefix;
         }
 
         public String getApiKey() {
@@ -48,6 +55,10 @@ public class EmoPollerConfiguration extends Configuration {
         public String getBaseURL() {
             return checkNotNull(baseURL);
         }
+
+        public String getSubscriptionTable() {return checkNotNull(subscriptionTable);}
+
+        public String getSubscriptionPrefix() {return checkNotNull(subscriptionPrefix);}
     }
 
     public static class LambdaConfiguration {

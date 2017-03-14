@@ -6,6 +6,8 @@ poller:
 emodb:
   apiKey: "ENCRYPTED 'local_admin' GOES HERE"
   baseURL: http://localhost:8080
+  subscriptionTable: "emo-lambda-fanout:lambda-subscription"
+  subscriptionPrefix: "emo-lambda-fanout"
 
 lambda:
   local: true

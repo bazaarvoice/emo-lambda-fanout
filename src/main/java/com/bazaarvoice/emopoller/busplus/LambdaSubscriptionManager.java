@@ -37,6 +37,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.Inject;
+import com.google.inject.name.Named;
 import io.dropwizard.lifecycle.Managed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,7 +81,6 @@ public class LambdaSubscriptionManager implements Managed {
     private final ApiKeyCrypto apiKeyCrypto;
     private final String managerApiKey;
 
-    private static final String SUBSCRIPTION_TABLE = "emo-lambda-fanout:lambda-subscription";
     private static final Duration SUBSCRIPTION_TTL = Duration.ofDays(2);
     private static final Duration EVENT_TTL = Duration.ofDays(30);
     private static final Logger LOG = LoggerFactory.getLogger(LambdaSubscriptionManager.class);
@@ -91,6 +91,8 @@ public class LambdaSubscriptionManager implements Managed {
     private Service ticker;
     private Service metadataPoller;
     private ListeningExecutorService processExecutor;
+    private final String subscriptionTable;
+    private final String subscriptionPrefix;
 
     private static class EmoJson implements Versioned {
         private final JsonNode jsonNode;
@@ -126,6 +128,8 @@ public class LambdaSubscriptionManager implements Managed {
         this.dataBusClient = dataBusClient;
         this.lambdaConfiguration = lambdaConfiguration;
         this.metricRegistrar = metricRegistrar;
+        this.subscriptionTable = emoConfiguration.getSubscriptionTable();
+        this.subscriptionPrefix = emoConfiguration.getSubscriptionPrefix();
         this.managerApiKey = apiKeyCrypto.decryptCustom(emoConfiguration.getApiKey(), of("app", "emo-lambda-fanout"));
         this.lambdaInvocation = lambdaInvocation;
         this.apiKeyCrypto = apiKeyCrypto;
@@ -187,8 +191,8 @@ public class LambdaSubscriptionManager implements Managed {
 
             metadataPoller = new AbstractScheduledService() {
                 @Override protected void runOneIteration() throws Exception {
-                    dataBusClient.subscribe("emo-lambda-fanout-subscriptions", Conditions.intrinsic(Intrinsic.TABLE, SUBSCRIPTION_TABLE), Duration.ofDays(7), Duration.ofDays(1000), managerApiKey);
-                    final List<JsonNode> poll = dataBusClient.poll("emo-lambda-fanout-subscriptions", Duration.ofMinutes(10), 999, managerApiKey);
+                    dataBusClient.subscribe(subscriptionPrefix + "-subscriptions", Conditions.intrinsic(Intrinsic.TABLE, subscriptionTable), Duration.ofDays(7), Duration.ofDays(1000), managerApiKey);
+                    final List<JsonNode> poll = dataBusClient.poll(subscriptionPrefix + "-subscriptions", Duration.ofMinutes(10), 999, managerApiKey);
                     poll.parallelStream()
                         .forEach(jsonNode -> {
                             final EmoJson emoJson = new EmoJson(jsonNode.get("content"));
@@ -197,7 +201,7 @@ public class LambdaSubscriptionManager implements Managed {
                             } catch (VersionConflictException e) {
                                 // ignore
                             }
-                            dataBusClient.acknowledge("emo-lambda-fanout-subscriptions", jsonNode.get("eventKey").asText(), managerApiKey);
+                            dataBusClient.acknowledge(subscriptionPrefix + "-subscriptions", jsonNode.get("eventKey").asText(), managerApiKey);
                         });
                     LOG.info("Polling subscription metadata returned [{}] events", poll.size());
                 }
@@ -208,15 +212,15 @@ public class LambdaSubscriptionManager implements Managed {
             };
 
             dataStoreClient.updateTable(
-                SUBSCRIPTION_TABLE,
+                subscriptionTable,
                 new TableOptionsBuilder().setPlacement("app_global:default").build(),
                 JsonUtil.obj(),
                 new AuditBuilder().setComment("Ensuring table exists").build(),
                 managerApiKey);
 
-            dataBusClient.subscribe("emo-lambda-fanout-subscriptions", Conditions.intrinsic(Intrinsic.TABLE, SUBSCRIPTION_TABLE), Duration.ofDays(7), Duration.ofDays(1000), managerApiKey);
+            dataBusClient.subscribe(subscriptionPrefix + "-subscriptions", Conditions.intrinsic(Intrinsic.TABLE, subscriptionTable), Duration.ofDays(7), Duration.ofDays(1000), managerApiKey);
             metadataPoller.startAsync().awaitRunning();
-            StreamSupport.stream(DataStoreUtils.pscan(dataStoreClient, SUBSCRIPTION_TABLE, managerApiKey).spliterator(), true)
+            StreamSupport.stream(DataStoreUtils.pscan(dataStoreClient, subscriptionTable, managerApiKey).spliterator(), true)
                 .map(EmoJson::new)
                 .forEach(emoJson -> {
                     try {
@@ -256,7 +260,7 @@ public class LambdaSubscriptionManager implements Managed {
 
         final JsonNode jsonNode = internalGet(lambdaArn);
 
-        final String subscriptionName = getSubscriptionName(jsonNode, "emo-lambda-fanout-" + UUID.randomUUID());
+        final String subscriptionName = getSubscriptionName(jsonNode, subscriptionPrefix + "-" + UUID.randomUUID());
 
         final String cypherTextDelegateApiKey = apiKeyCrypto.encrypt(delegateApiKey, subscriptionName, lambdaArn);
 
@@ -264,7 +268,7 @@ public class LambdaSubscriptionManager implements Managed {
 
         final String subscriptionId = HashUtil.sha512hash_base16(lambdaArn);
         dataStoreClient.update(
-            SUBSCRIPTION_TABLE,
+            subscriptionTable,
             subscriptionId, // yeah, we should only hand events from a subscription out to a single lambda at a time.
             createDelta(new LambdaSubscriptionDAO.LambdaSubscription(subscriptionId, subscriptionName, lambdaArn, condition, claimTtl, batchSize, delegateApiKey, cypherTextDelegateApiKey)),
             new AuditBuilder().setComment("Registering lambda[" + lambdaArn + "] for subscription").build(),
@@ -291,7 +295,7 @@ public class LambdaSubscriptionManager implements Managed {
 
     public JsonNode getAll(final String key) {
         final ArrayNode result = JsonUtil.arr();
-        for (JsonNode jsonNode : DataStoreUtils.pscan(dataStoreClient, SUBSCRIPTION_TABLE, managerApiKey)) {
+        for (JsonNode jsonNode : DataStoreUtils.pscan(dataStoreClient, subscriptionTable, managerApiKey)) {
             if (jsonNode != null) {
                 if (!getDelegateApiKeyArgon2Hash(jsonNode).isEmpty()) {
                     final String delegateApiKeyHash = getDelegateApiKeyArgon2Hash(jsonNode);
@@ -333,11 +337,11 @@ public class LambdaSubscriptionManager implements Managed {
         }
     }
 
-    private JsonNode internalGet(final String lambdaArn) {return dataStoreClient.get(SUBSCRIPTION_TABLE, HashUtil.sha512hash_base16(lambdaArn), managerApiKey);}
+    private JsonNode internalGet(final String lambdaArn) {return dataStoreClient.get(subscriptionTable, HashUtil.sha512hash_base16(lambdaArn), managerApiKey);}
 
     private void deactivate(final String id) {
         dataStoreClient.update(
-            SUBSCRIPTION_TABLE,
+            subscriptionTable,
             id,
             deactivateDelta(),
             new AuditBuilder().setComment("deactivating subscription").build(),
@@ -348,7 +352,7 @@ public class LambdaSubscriptionManager implements Managed {
 
     private void activate(final String id) {
         dataStoreClient.update(
-            SUBSCRIPTION_TABLE,
+            subscriptionTable,
             id,
             activateDelta(),
             new AuditBuilder().setComment("activating subscription").build(),
@@ -411,7 +415,7 @@ public class LambdaSubscriptionManager implements Managed {
 
     private Spliterator<JsonNode> scanSubscriptions() {
         final Timer.Context time = metricRegistrar.timer("emo_lambda_fanout.datastore.get_pscan_iterator.time", ImmutableMap.of()).time();
-        final Spliterator<JsonNode> spliterator = DataStoreUtils.pscan(dataStoreClient, SUBSCRIPTION_TABLE, managerApiKey).spliterator();
+        final Spliterator<JsonNode> spliterator = DataStoreUtils.pscan(dataStoreClient, subscriptionTable, managerApiKey).spliterator();
         time.stop();
         return spliterator;
     }
