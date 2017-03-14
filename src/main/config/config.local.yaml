@@ -1,0 +1,34 @@
+poller:
+  cmk: "YOUR_CMK_GOES_HERE (http://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#master_keys)"
+  apiKeyDigestWhitelist:
+    local_admin: "$argon2i$v=19$m=65536,t=2,p=1$xxBA8eSXSUpQWep+kbuoqg$RHyHvAN74TdVzcqxHLYMZoyZhkCQ+hBLiRYnRw4JedE"
+
+emodb:
+  apiKey: "ENCRYPTED 'local_admin' GOES HERE"
+  baseURL: http://localhost:8080
+
+lambda:
+  local: true
+  nodejsHome: "/usr/local/bin/"
+  pollSize: 100
+  pollAllConcurrency: 1
+  processPoolSize: 20
+  processQueueSize: 20
+
+logging:
+  level: INFO
+  loggers:
+    "io.dropwizard": INFO
+    "com.bazaarvoice.emopoller.busplus.LambdaSubscriptionManager": DEBUG
+  appenders:
+    - type: console
+
+server:
+  adminContextPath: /
+  applicationContextPath: /
+  applicationConnectors:
+    - type: http
+      port: 9999
+  adminConnectors:
+    - type: http
+      port: 9998
