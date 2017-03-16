@@ -77,7 +77,7 @@ public class AWSLambdaInvocationImpl implements LambdaInvocation {
             final ResponseMetadata cachedResponseMetadata = awsLambda.getCachedResponseMetadata(request);
 
             final String resultPayload = new String(response.getPayload().array());
-            final String requestId = cachedResponseMetadata.getRequestId();
+            final String requestId = cachedResponseMetadata == null ? "unknown" : cachedResponseMetadata.getRequestId();
             final String functionError = response.getFunctionError();
 
             LOG.info("Result of arn[{}] request[{}]: err[{}] payload[{}]",
