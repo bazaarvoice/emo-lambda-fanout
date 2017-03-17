@@ -386,25 +386,30 @@ public class LambdaSubscriptionManager implements Managed {
                 .filter(LambdaSubscriptionDAO::getActive)
                 .map(LambdaSubscriptionDAO::asLambdaSubscription)
                 .flatMap(lambdaSubscription -> {
-                    LOG.debug("enqueuing lambda {} {}", lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn());
+                    try {
+                        LOG.debug("enqueuing lambda {} {}", lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn());
 
-                    final String delegateApiKey = apiKeyCrypto.decrypt(lambdaSubscription.getCypherTextDelegateApiKey(), lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn());
+                        final String delegateApiKey = apiKeyCrypto.decrypt(lambdaSubscription.getCypherTextDelegateApiKey(), lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn());
 
-                    LOG.debug("Renewing sub[{}]", lambdaSubscription.getSubscriptionName());
-                    dataBusClient.subscribe(lambdaSubscription.getSubscriptionName(), lambdaSubscription.getCondition(), SUBSCRIPTION_TTL, EVENT_TTL, delegateApiKey);
+                        LOG.debug("Renewing sub[{}]", lambdaSubscription.getSubscriptionName());
+                        dataBusClient.subscribe(lambdaSubscription.getSubscriptionName(), lambdaSubscription.getCondition(), SUBSCRIPTION_TTL, EVENT_TTL, delegateApiKey);
 
-                    LOG.debug("Polling sub[{}]", lambdaSubscription.getSubscriptionName());
+                        LOG.debug("Polling sub[{}]", lambdaSubscription.getSubscriptionName());
 
-                    List<JsonNode> poll = dataBusClient.poll(lambdaSubscription.getSubscriptionName(), lambdaSubscription.getClaimTtl(), lambdaConfiguration.getPollSize(), delegateApiKey);
-                    metricRegistrar
-                        .histogram("emo_lambda_fanout.poll.events", ImmutableMap.of("lambda_arn", lambdaSubscription.getLambdaArn().replaceAll("[:]", "_")))
-                        .update(poll.size());
-                    LOG.info("Polled [{}] events for arn[{}]", poll.size(), lambdaSubscription.getLambdaArn());
+                        List<JsonNode> poll = dataBusClient.poll(lambdaSubscription.getSubscriptionName(), lambdaSubscription.getClaimTtl(), lambdaConfiguration.getPollSize(), delegateApiKey);
+                        metricRegistrar
+                            .histogram("emo_lambda_fanout.poll.events", ImmutableMap.of("lambda_arn", lambdaSubscription.getLambdaArn().replaceAll("[:]", "_")))
+                            .update(poll.size());
+                        LOG.info("Polled [{}] events for arn[{}]", poll.size(), lambdaSubscription.getLambdaArn());
 
-                    return Lists
-                        .partition(poll, lambdaSubscription.getBatchSize())
-                        .parallelStream()
-                        .map(batch -> new Tuple3<>(lambdaSubscription, batch, delegateApiKey));
+                        return Lists
+                            .partition(poll, lambdaSubscription.getBatchSize())
+                            .parallelStream()
+                            .map(batch -> new Tuple3<>(lambdaSubscription, batch, delegateApiKey));
+                    } catch (Exception e) {
+                        LOG.error(String.format("error handling sub [%s] [%s]", lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn()), e);
+                        throw e;
+                    }
                 })
                 .forEach((tuple3 -> processExecutor.submit(() -> process(tuple3.a, tuple3.b, tuple3.c))));
         } catch (Exception e) {
