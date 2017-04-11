@@ -1,7 +1,12 @@
+tenants:
+  local:
+    keyDigestWhitelist:
+      local_admin: "$argon2i$v=19$m=65536,t=2,p=1$xxBA8eSXSUpQWep+kbuoqg$RHyHvAN74TdVzcqxHLYMZoyZhkCQ+hBLiRYnRw4JedE"
+    emodb:
+      baseURL: "http://localhost:8080"
+
 poller:
   cmk: "YOUR_CMK_GOES_HERE (http://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#master_keys)"
-  apiKeyDigestWhitelist:
-    local_admin: "$argon2i$v=19$m=65536,t=2,p=1$xxBA8eSXSUpQWep+kbuoqg$RHyHvAN74TdVzcqxHLYMZoyZhkCQ+hBLiRYnRw4JedE"
 
 emodb:
   apiKey: "ENCRYPTED 'local_admin' GOES HERE"
@@ -13,7 +18,6 @@ lambda:
   local: true
   nodejsHome: "/usr/local/bin/"
   pollSize: 100
-  pollAllConcurrency: 1
   processPoolSize: 20
   processQueueSize: 20
 

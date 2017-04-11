@@ -1,8 +1,11 @@
 package com.bazaarvoice.emopoller;
 
 import com.bazaarvoice.emopoller.busplus.LambdaSubscriptionManager;
+import com.bazaarvoice.emopoller.busplus.lambda.LambdaSubscriptionDAO;
+import com.bazaarvoice.emopoller.busplus.lambda.LambdaSubscriptionDAOImpl;
 import com.bazaarvoice.emopoller.busplus.lambda.LambdaThroughputTest;
 import com.bazaarvoice.emopoller.metrics.MetricsTelemetry;
+import com.bazaarvoice.emopoller.resource.AuthorizationRequestFilter;
 import com.bazaarvoice.emopoller.resource.PollerResource;
 import com.bazaarvoice.emopoller.tools.HashKeyCommand;
 import com.google.inject.Guice;
@@ -18,7 +21,7 @@ public class EmoPollerApp extends Application<EmoPollerConfiguration> {
 //    private static final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
 
     public static void main(String[] args) throws Exception {
-        //TODO record thread pause timesq
+        //TODO record thread pause times
 //        threadMXBean.setThreadCpuTimeEnabled(true);
 //        threadMXBean.setThreadContentionMonitoringEnabled(true);
         new EmoPollerApp().run(args);
@@ -43,12 +46,14 @@ public class EmoPollerApp extends Application<EmoPollerConfiguration> {
     @Override public void run(final EmoPollerConfiguration configuration, final Environment environment) throws Exception {
         final Injector injector = Guice.createInjector(
             Stage.PRODUCTION /*eagerly inject and load everything*/,
-            new EmoPollerModule(configuration, environment.metrics(), getName()));
+            new EmoPollerModule(getName(), configuration, environment.metrics(), environment.healthChecks()));
 
+        environment.jersey().register(injector.getInstance(AuthorizationRequestFilter.class));
         environment.jersey().register(injector.getInstance(PollerResource.class));
 
+        environment.lifecycle().manage(injector.getInstance(LambdaSubscriptionDAO.class));
+
         environment.lifecycle().manage(injector.getInstance(LambdaSubscriptionManager.class));
-        environment.healthChecks().register("lambdaSubscriptionManager", injector.getInstance(LambdaSubscriptionManager.class).healthcheck());
 
         environment.lifecycle().manage(injector.getInstance(MetricsTelemetry.class));
     }

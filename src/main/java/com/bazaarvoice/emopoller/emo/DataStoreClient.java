@@ -1,8 +1,5 @@
 package com.bazaarvoice.emopoller.emo;
 
-import com.bazaarvoice.emodb.common.json.RisonHelper;
-import com.bazaarvoice.emodb.sor.api.Audit;
-import com.bazaarvoice.emodb.sor.api.TableOptions;
 import com.bazaarvoice.emodb.sor.delta.Delta;
 import com.bazaarvoice.emopoller.EmoPollerConfiguration;
 import com.bazaarvoice.emopoller.util.JsonUtil;
@@ -42,12 +39,11 @@ public class DataStoreClient {
         this.baseURL = emoConfiguration.getBaseURL();
     }
 
-    public void updateTable(final String table,
-                            final TableOptions options,
-                            final JsonNode template,
-                            final Audit audit,
-                            final String apiKey) {
-        updateTable(table, RisonHelper.asORison(options), template, RisonHelper.asORison(audit), apiKey);
+    public DataStoreClient(final Client client,
+                           final String baseURL) {
+
+        this.client = client;
+        this.baseURL = baseURL;
     }
 
     public JsonNode updateTable(final String table,
@@ -170,15 +166,6 @@ public class DataStoreClient {
         } catch (IOException e) {
             throw new RuntimeException(String.format("Unexpected error reading [%s][%s]", table, key), e);
         }
-    }
-
-    public JsonNode update(final String table,
-                           final String key,
-                           final Delta delta,
-                           final Audit audit,
-                           final List<String> tags,
-                           final String apiKey) {
-        return update(table, key, delta, RisonHelper.asORison(audit), tags, apiKey);
     }
 
     public JsonNode update(final String table,

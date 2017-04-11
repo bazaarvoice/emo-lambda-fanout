@@ -5,17 +5,22 @@ import com.amazonaws.services.kms.AWSKMSClient;
 import com.amazonaws.services.lambda.AWSLambda;
 import com.amazonaws.services.lambda.AWSLambdaClient;
 import com.bazaarvoice.emopoller.busplus.LambdaSubscriptionManager;
+import com.bazaarvoice.emopoller.busplus.ProcessPool;
+import com.bazaarvoice.emopoller.busplus.SubscriptionPollerFactory;
 import com.bazaarvoice.emopoller.busplus.kms.ApiKeyCrypto;
 import com.bazaarvoice.emopoller.busplus.lambda.AWSLambdaInvocationImpl;
 import com.bazaarvoice.emopoller.busplus.lambda.LambdaInvocation;
+import com.bazaarvoice.emopoller.busplus.lambda.LambdaSubscriptionDAO;
+import com.bazaarvoice.emopoller.busplus.lambda.LambdaSubscriptionDAOImpl;
 import com.bazaarvoice.emopoller.busplus.lambda.LocalLambdaInvocationImpl;
 import com.bazaarvoice.emopoller.emo.DataBusClient;
 import com.bazaarvoice.emopoller.emo.DataStoreClient;
 import com.bazaarvoice.emopoller.metrics.MetricRegistrar;
 import com.bazaarvoice.emopoller.metrics.MetricsTelemetry;
+import com.bazaarvoice.emopoller.resource.AuthorizationRequestFilter;
 import com.bazaarvoice.emopoller.resource.PollerResource;
 import com.codahale.metrics.MetricRegistry;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.codahale.metrics.health.HealthCheckRegistry;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.AbstractScheduledService;
 import com.google.inject.AbstractModule;
@@ -32,11 +37,16 @@ class EmoPollerModule extends AbstractModule {
     private final EmoPollerConfiguration configuration;
     private final MetricRegistry metrics;
     private final String name;
+    private final HealthCheckRegistry healthCheckRegistry;
 
-    EmoPollerModule(final EmoPollerConfiguration configuration, final MetricRegistry metrics, final String name) {
+    EmoPollerModule(final String name,
+                    final EmoPollerConfiguration configuration,
+                    final MetricRegistry metrics,
+                    final HealthCheckRegistry healthCheckRegistry) {
 
         this.configuration = configuration;
         this.metrics = metrics;
+        this.healthCheckRegistry = healthCheckRegistry;
         this.name = name;
     }
 
@@ -46,17 +56,22 @@ class EmoPollerModule extends AbstractModule {
         bind(String.class).annotatedWith(Names.named("appName")).toInstance(name);
 
         bind(MetricRegistrar.class).toInstance(new MetricRegistrar(metrics));
+        bind(HealthCheckRegistry.class).toInstance(healthCheckRegistry);
         bind(EmoPollerConfiguration.class).toInstance(configuration);
         bind(EmoPollerConfiguration.EmoConfiguration.class).toInstance(configuration.getEmoConfiguration());
         bind(EmoPollerConfiguration.LambdaConfiguration.class).toInstance(configuration.getLambdaConfiguration());
-        bind(JsonNode.class).annotatedWith(Names.named("apiKeyDigestWhitelist")).toInstance(configuration.getProxyConfiguration().getApiKeyDigestWhitelist());
+        bind(Map.class).annotatedWith(Names.named("tenantConfigurations")).toInstance(configuration.getTenantConfigurations());
         bind(String.class).annotatedWith(Names.named("cmk")).toInstance(configuration.getProxyConfiguration().getCMK());
 
+        bind(AuthorizationRequestFilter.class).asEagerSingleton();
         bind(PollerResource.class).asEagerSingleton();
         bind(DataBusClient.class).asEagerSingleton();
 
         bind(Client.class).toInstance(ClientBuilder.newClient());
 
+        bind(LambdaSubscriptionDAO.class).to(LambdaSubscriptionDAOImpl.class).asEagerSingleton();
+        bind(SubscriptionPollerFactory.class).asEagerSingleton();
+        bind(ProcessPool.class).asEagerSingleton();
         bind(LambdaSubscriptionManager.class).asEagerSingleton();
         bind(ApiKeyCrypto.class).asEagerSingleton();
 

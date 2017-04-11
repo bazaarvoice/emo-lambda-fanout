@@ -44,6 +44,14 @@ public class DataBusClient {
         this.metricRegistrar = metricRegistrar;
     }
 
+    public DataBusClient(final Client client,
+                         final String baseURL,
+                         final MetricRegistrar metricRegistrar) {
+        this.client = client;
+        this.baseURL = baseURL;
+        this.metricRegistrar = metricRegistrar;
+    }
+
     public JsonNode subscribe(final String subscriptionName,
                           final Condition condition,
                           final Duration subscriptionTTL,
@@ -179,6 +187,7 @@ public class DataBusClient {
     public List<JsonNode> poll(final String subscriptionName,
                                final Duration claimTtl,
                                final int limit,
+                               final boolean longpoll,
                                final String apiKey) {
         final Timer.Context time = metricRegistrar.timer("emo_lambda_fanout.databus.poll.time", ImmutableMap.of()).time();
         final URI uri = UriBuilder.fromUri(baseURL)
@@ -187,7 +196,7 @@ public class DataBusClient {
             .queryParam("limit", limit)
             .queryParam("includeTags", true)
             .queryParam("partitioned", false)
-            .queryParam("ignoreLongPoll", true)
+            .queryParam("ignoreLongPoll", !longpoll)
             .build();
 
         final Response response = responseOrThrow(client
