@@ -66,7 +66,7 @@ public class DataStoreClient {
                 .invoke(),
             (r, e) -> {
                 final String context = String.format("dataStore(%s).updateTable(%s, %s, %s, %s)", uri, table, options, template, audit);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
+                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}", context, r.getStatus(), r.getLocation(), e);
             }
         );
 
@@ -96,7 +96,7 @@ public class DataStoreClient {
                 .invoke(),
             (r, e) -> {
                 final String context = String.format("dataStore(%s).listTables(%s, %s)", uri, from, limit);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
+                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}", context, r.getStatus(), r.getLocation(), e);
             }
         );
 
@@ -123,7 +123,7 @@ public class DataStoreClient {
                 .invoke(),
             (r, e) -> {
                 final String context = String.format("dataStore(%s).get(%s, %s)", uri, table, key);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
+                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}", context, r.getStatus(), r.getLocation(), e);
             }
         );
 
@@ -157,7 +157,7 @@ public class DataStoreClient {
                 .invoke(),
             (r, e) -> {
                 final String context = String.format("dataStore(%s).get(%s, %s)", uri, table, key);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
+                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}", context, r.getStatus(), r.getLocation(), e);
             }
         );
 
@@ -191,7 +191,7 @@ public class DataStoreClient {
                 .invoke(),
             (r, e) -> {
                 final String context = String.format("dataStore(%s).update(%s, %s, %s, %s)", uri, table, key, delta, audit);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
+                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}", context, r.getStatus(), r.getLocation(), e);
             }
         );
 
@@ -221,7 +221,7 @@ public class DataStoreClient {
                 .invoke(),
             (r, e) -> {
                 final String context = String.format("dataStore(%s).scan(%s, %s, %s)", uri, table, from, limit);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
+                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}", context, r.getStatus(), r.getLocation(), e);
             }
         );
 
@@ -247,7 +247,7 @@ public class DataStoreClient {
                 .invoke(),
             (r, e) -> {
                 final String context = String.format("dataStore(%s).getSplits(%s, %s)", uri, table, desiredRecordsPerSplit);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
+                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}", context, r.getStatus(), r.getLocation(), e);
             }
         );
 
@@ -276,7 +276,7 @@ public class DataStoreClient {
                 .invoke(),
             (r, e) -> {
                 final String context = String.format("dataStore(%s).getSplit(%s, %s, %s, %s)", uri, table, split, fromKeyExclusive, limit);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
+                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}", context, r.getStatus(), r.getLocation(), e);
             }
         );
 

@@ -60,7 +60,7 @@ public class SubscriptionPollerFactory {
     }
 
     SubscriptionPoller produce(final String tenant, final String lambdaArn) {
-        Preconditions.checkArgument(tenantConfigurations.containsKey(tenant), "Unknown tenant: [" + tenant + "]");
+        Preconditions.checkArgument(tenantConfigurations.containsKey(tenant), "Unknown tenant: [" + tenant + "] for [" + lambdaArn + "]");
         return new SubscriptionPoller(tenant, lambdaArn);
     }
 

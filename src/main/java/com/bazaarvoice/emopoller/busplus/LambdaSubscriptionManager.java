@@ -14,6 +14,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import io.dropwizard.lifecycle.Managed;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.List;
@@ -22,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class LambdaSubscriptionManager implements Managed {
+    private static final Logger LOG = LoggerFactory.getLogger(LambdaSubscriptionManager.class);
     private final LambdaSubscriptionDAO lambdaSubscriptionDAO;
     private final LambdaInvocation lambdaInvocation;
     private final ApiKeyCrypto apiKeyCrypto;
@@ -50,7 +53,14 @@ public class LambdaSubscriptionManager implements Managed {
         this.pollers = new ConcurrentHashMap<>();
 
         lambdaSubscriptionDAO.registerWatcher("poller-watcher", lambdaSubscription -> {
-            pollers.putIfAbsent(lambdaSubscription.getId(), subscriptionPollerFactory.produce(lambdaSubscription.getTenant(), lambdaSubscription.getLambdaArn()));
+            final SubscriptionPollerFactory.SubscriptionPoller poller;
+            try {
+                poller = subscriptionPollerFactory.produce(lambdaSubscription.getTenant(), lambdaSubscription.getLambdaArn());
+            } catch (IllegalArgumentException e) {
+                LOG.warn("Exception creating poller for subscription: ", e);
+                return;
+            }
+            pollers.putIfAbsent(lambdaSubscription.getId(), poller);
             startedLock.lock();
             try {
                 if (started) {
