@@ -58,7 +58,12 @@ public class LambdaSubscriptionDAOImpl implements LambdaSubscriptionDAO, Managed
             this.jsonNode = jsonNode.deepCopy();
         }
 
-        public String getTenant() { return jsonNode.path("tenant").asText(""); }
+        public String getEnvironment() {
+            return jsonNode.path("environment").asText(
+                jsonNode.path("tenant").asText(
+                    "")
+            );
+        }
 
         public String getSubscriptionName() { return jsonNode.path("subscriptionName").asText(""); }
 
@@ -84,7 +89,6 @@ public class LambdaSubscriptionDAOImpl implements LambdaSubscriptionDAO, Managed
             return jsonNode.deepCopy();
         }
     }
-
 
 
     @Inject
@@ -168,7 +172,7 @@ public class LambdaSubscriptionDAOImpl implements LambdaSubscriptionDAO, Managed
 
     @Override
     public String saveAndNotifyWatchers(final LambdaSubscription lambdaSubscription) {
-        final String id = getSubscriptionId(lambdaSubscription.getTenant(), lambdaSubscription.getLambdaArn());
+        final String id = getSubscriptionId(lambdaSubscription.getEnvironment(), lambdaSubscription.getLambdaArn());
         Preconditions.checkArgument(lambdaSubscription.getId() == null || lambdaSubscription.getId().equals(id));
         dataStoreClient.update(
             subscriptionTable,
@@ -190,12 +194,12 @@ public class LambdaSubscriptionDAOImpl implements LambdaSubscriptionDAO, Managed
         return id;
     }
 
-    @Override public Set<LambdaSubscription> getAll(final String tenant) {
-        return subscriptions.values().parallelStream().filter(n -> tenant.equals(n.getTenant())).collect(Collectors.toSet());
+    @Override public Set<LambdaSubscription> getAll(final String environment) {
+        return subscriptions.values().parallelStream().filter(n -> environment.equals(n.getEnvironment())).collect(Collectors.toSet());
     }
 
-    @Override public LambdaSubscription get(final String tenant, final String lambdaArn) {
-        return subscriptions.get(getSubscriptionId(tenant, lambdaArn));
+    @Override public LambdaSubscription get(final String environment, final String lambdaArn) {
+        return subscriptions.get(getSubscriptionId(environment, lambdaArn));
     }
 
     @Override public void start() throws Exception {
@@ -268,13 +272,13 @@ public class LambdaSubscriptionDAOImpl implements LambdaSubscriptionDAO, Managed
         watchers.values().forEach((watcher) -> watcher.onUpdate(subscriptions.get(id)));
     }
 
-    private String getSubscriptionId(final String tenant, final String lambdaArn) {
-        return tenant + ":" + HashUtil.sha512hash_base16(lambdaArn);
+    private String getSubscriptionId(final String environment, final String lambdaArn) {
+        return environment + ":" + HashUtil.sha512hash_base16(lambdaArn);
     }
 
     private static Delta createDelta(final LambdaSubscription lambdaSubscription) {
         return Deltas.mapBuilder()
-            .put("tenant", lambdaSubscription.getTenant())
+            .put("environment", lambdaSubscription.getEnvironment())
             .put("subscriptionName", lambdaSubscription.getSubscriptionName())
             .put("lambdaArn", lambdaSubscription.getLambdaArn())
             .put("condition", lambdaSubscription.getCondition())

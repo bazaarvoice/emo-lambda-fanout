@@ -6,7 +6,7 @@ import org.vvcephei.occ_map.Versioned;
 import java.time.Duration;
 
 public interface LambdaSubscription extends Versioned {
-    String getTenant();
+    String getEnvironment();
 
     String getSubscriptionName();
 

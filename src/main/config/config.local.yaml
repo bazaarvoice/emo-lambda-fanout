@@ -1,4 +1,4 @@
-tenants:
+environments:
   local:
     keyDigestWhitelist:
       local_admin: "$argon2i$v=19$m=65536,t=2,p=1$xxBA8eSXSUpQWep+kbuoqg$RHyHvAN74TdVzcqxHLYMZoyZhkCQ+hBLiRYnRw4JedE"

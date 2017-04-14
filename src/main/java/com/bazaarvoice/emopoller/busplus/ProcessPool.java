@@ -95,7 +95,7 @@ public class ProcessPool implements Managed {
     @Timed(name = "emo_lambda_fanout.poll.time")
     private void process(final LambdaSubscription lambdaSubscription, final List<JsonNode> batch, final OnBatchCompleteCallback onBatchCompleteCallback) {
         // we may have been queued up for a while, so check again if this subscription is active
-        if (!lambdaSubscriptionDAO.get(lambdaSubscription.getTenant(), lambdaSubscription.getLambdaArn()).isActive()) {
+        if (!lambdaSubscriptionDAO.get(lambdaSubscription.getEnvironment(), lambdaSubscription.getLambdaArn()).isActive()) {
             LOG.info("Started processing [{}], which is currently deactivated. Bombing out instead...", lambdaSubscription.getLambdaArn());
             return;
         }
@@ -125,7 +125,7 @@ public class ProcessPool implements Managed {
             try {
                 // INVOCATION
                 final long start = System.currentTimeMillis();
-                final ArrayNode contents = JsonUtil.arr(batch.stream().map(jn -> ((ObjectNode)jn).put("~fanout.tenant", lambdaSubscription.getTenant())));
+                final ArrayNode contents = JsonUtil.arr(batch.stream().map(jn -> ((ObjectNode)jn).put("~fanout.env", lambdaSubscription.getEnvironment())));
                 final AWSLambdaInvocationImpl.InvocationResult result = lambdaInvocation.invoke(lambdaSubscription.getLambdaArn(), contents);
                 final long durationMillis = System.currentTimeMillis() - start;
                 metricRegistrar

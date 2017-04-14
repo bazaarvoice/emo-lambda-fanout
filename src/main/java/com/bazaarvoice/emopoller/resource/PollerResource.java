@@ -30,7 +30,7 @@ import java.time.Duration;
 
 import static com.bazaarvoice.emopoller.resource.AuthorizationRequestFilter.APIKEY_AUTH_HEADER;
 
-@Path("/{tenant}/poller")
+@Path("/{environment}/poller")
 public class PollerResource {
     private static final String APPLICATION_X_JSON_DELTA = "application/x.json-delta";
 
@@ -45,7 +45,7 @@ public class PollerResource {
     @Timed
     @POST
     @Consumes(APPLICATION_X_JSON_DELTA)
-    public void subscribeLambda(@PathParam("tenant") String tenant,
+    public void subscribeLambda(@PathParam("environment") String environment,
                                 @QueryParam("lambdaArn") final String lambdaArn,
                                 @QueryParam("batchSize") final IntParam batchSize,
                                 @QueryParam("claimTtl") final IntParam claimTtl, // this one is a function of how long the lambda to take to run.
@@ -54,7 +54,7 @@ public class PollerResource {
         if (lambdaArn == null) throw new WebApplicationException("lambdaArn is required", 400);
         if (claimTtl == null) throw new WebApplicationException("claimTtl is required", 400);
         try {
-            lambdaSubscriptionManager.register(tenant, lambdaArn, Conditions.fromString(condition), Duration.ofSeconds(claimTtl.get()), batchSize == null ? null : batchSize.get(), getKey(headers));
+            lambdaSubscriptionManager.register(environment, lambdaArn, Conditions.fromString(condition), Duration.ofSeconds(claimTtl.get()), batchSize == null ? null : batchSize.get(), getKey(headers));
         } catch (NoSuchFunctionException | ParseException e) {
             throw new WebApplicationException(e.getMessage(), 404);
         } catch (InsufficientPermissionsException e) {
@@ -76,12 +76,12 @@ public class PollerResource {
     @Timed
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public JsonNode getLambdaSubscription(final @PathParam("tenant") String tenant, @Nullable @QueryParam("lambdaArn") final String lambdaArn, @Context final HttpHeaders headers) {
+    public JsonNode getLambdaSubscription(final @PathParam("environment") String environment, @Nullable @QueryParam("lambdaArn") final String lambdaArn, @Context final HttpHeaders headers) {
         try {
             if (lambdaArn == null) {
-                return JsonUtil.arr(lambdaSubscriptionManager.getAll(tenant, getKey(headers)).parallelStream().map(LambdaSubscription::asJson));
+                return JsonUtil.arr(lambdaSubscriptionManager.getAll(environment, getKey(headers)).parallelStream().map(LambdaSubscription::asJson));
             } else {
-                return lambdaSubscriptionManager.get(tenant, lambdaArn, getKey(headers)).asJson();
+                return lambdaSubscriptionManager.get(environment, lambdaArn, getKey(headers)).asJson();
             }
         } catch (LambdaSubscriptionManager.UnauthorizedException e) {
             throw new WebApplicationException("not authorized", 403);
@@ -91,13 +91,13 @@ public class PollerResource {
     @Timed
     @DELETE
     @Produces(MediaType.APPLICATION_JSON)
-    public JsonNode deactivateLambdaSubscription(final @PathParam("tenant") String tenant, @Nullable @QueryParam("lambdaArn") final String lambdaArn, @Context final HttpHeaders headers) {
+    public JsonNode deactivateLambdaSubscription(final @PathParam("environment") String environment, @Nullable @QueryParam("lambdaArn") final String lambdaArn, @Context final HttpHeaders headers) {
         try {
             if (lambdaArn == null) {
                 throw new WebApplicationException("lambdaArn is required", 400);
             } else {
-                lambdaSubscriptionManager.deactivate(tenant, lambdaArn, getKey(headers));
-                return lambdaSubscriptionManager.get(tenant, lambdaArn, getKey(headers)).asJson();
+                lambdaSubscriptionManager.deactivate(environment, lambdaArn, getKey(headers));
+                return lambdaSubscriptionManager.get(environment, lambdaArn, getKey(headers)).asJson();
             }
         } catch (LambdaSubscriptionManager.UnauthorizedException e) {
             throw new WebApplicationException("not authorized", 403);
@@ -107,13 +107,13 @@ public class PollerResource {
     @Timed
     @POST @Path("activate")
     @Produces(MediaType.APPLICATION_JSON)
-    public JsonNode activateLambdaSubscription(final @PathParam("tenant") String tenant, @Nullable @QueryParam("lambdaArn") final String lambdaArn, @Context final HttpHeaders headers) {
+    public JsonNode activateLambdaSubscription(final @PathParam("environment") String environment, @Nullable @QueryParam("lambdaArn") final String lambdaArn, @Context final HttpHeaders headers) {
         try {
             if (lambdaArn == null) {
                 throw new WebApplicationException("lambdaArn is required", 400);
             } else {
-                lambdaSubscriptionManager.activate(tenant, lambdaArn, getKey(headers));
-                return lambdaSubscriptionManager.get(tenant, lambdaArn, getKey(headers)).asJson();
+                lambdaSubscriptionManager.activate(environment, lambdaArn, getKey(headers));
+                return lambdaSubscriptionManager.get(environment, lambdaArn, getKey(headers)).asJson();
             }
         } catch (LambdaSubscriptionManager.UnauthorizedException e) {
             throw new WebApplicationException("not authorized", 403);
@@ -123,12 +123,12 @@ public class PollerResource {
     @Timed
     @GET @Path("size")
     @Produces(MediaType.APPLICATION_JSON)
-    public Integer getLambdaSubscriptionSize(final @PathParam("tenant") String tenant, @Nullable @QueryParam("lambdaArn") final String lambdaArn, @Context final HttpHeaders headers) {
+    public Integer getLambdaSubscriptionSize(final @PathParam("environment") String environment, @Nullable @QueryParam("lambdaArn") final String lambdaArn, @Context final HttpHeaders headers) {
         try {
             if (lambdaArn == null) {
                 throw new WebApplicationException("lambdaArn is required", 400);
             } else {
-                return lambdaSubscriptionManager.size(tenant, lambdaArn, getKey(headers));
+                return lambdaSubscriptionManager.size(environment, lambdaArn, getKey(headers));
             }
         } catch (LambdaSubscriptionManager.UnauthorizedException e) {
             throw new WebApplicationException("not authorized", 403);

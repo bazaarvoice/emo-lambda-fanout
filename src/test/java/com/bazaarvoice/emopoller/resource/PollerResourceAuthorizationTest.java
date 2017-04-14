@@ -32,7 +32,7 @@ public class PollerResourceAuthorizationTest extends JerseyTest {
     @Override protected Application configure() {
         final ResourceConfig resourceConfig = new ResourceConfig();
         final AuthorizationRequestFilter authorizationRequestFilter = new AuthorizationRequestFilter(ImmutableMap.of(
-            "testtenant", new EmoPollerConfiguration.TenantConfiguration(ImmutableMap.of(
+            "testenv", new EmoPollerConfiguration.EnvironmentConfiguration(ImmutableMap.of(
                 "testkey", "$argon2i$v=19$m=4096,t=3,p=1$bVNLL1Q5Qy9paHBMVklIazZQN0V5dGh2eUJ3ckR2cUd3YVREVDhGMVJ5VWtISlNZRmZ6aHFaSnpTTHdyRVFkV3Y0MC9SZFJxQTc3WWtRQld5VVlRRHhtbjQ3eGtEZmVNQ0U5NnBCUW9nYjVFNHNiWGlFcEgrRDA2QTJkbHBYSGsyWmhHWjBnN0ZNR1ZJMmZzeXh1ZlpjNE45SzJoNWNrVnlrMEpRMEVSeGY0PQ$3xuzz1Kq+U0ZdvQjAdzD/Q2qRc3MaYLXbpcbLlW6KzQ"
             ), null)
         ));
@@ -53,11 +53,11 @@ public class PollerResourceAuthorizationTest extends JerseyTest {
                 return null;
             }
 
-            @Override public Set<LambdaSubscription> getAll(final String tenant) {
+            @Override public Set<LambdaSubscription> getAll(final String environment) {
                 return ImmutableSet.of();
             }
 
-            @Override public LambdaSubscription get(final String tenant, final String lambdaArn) {
+            @Override public LambdaSubscription get(final String environment, final String lambdaArn) {
                 return null;
             }
 
@@ -81,16 +81,16 @@ public class PollerResourceAuthorizationTest extends JerseyTest {
         Assert.assertEquals(response.readEntity(String.class), "You must specify exactly one api key as a header [X-BV-API-Key].");
     }
 
-    @Test public void testRequiredTenant() {
+    @Test public void testRequiredEnvironment() {
         final Response response = target("/pants/poller").request()
             .header("X-BV-API-Key", "missing key")
             .get();
         Assert.assertEquals(response.getStatus(), 401);
-        Assert.assertEquals(response.readEntity(String.class), "Unknown tenant. Contact the poller administrators for help.");
+        Assert.assertEquals(response.readEntity(String.class), "Unknown environment. Contact the poller administrators for help.");
     }
 
     @Test public void testInvalidKey() {
-        final Response response = target("/testtenant/poller").request()
+        final Response response = target("/testenv/poller").request()
             .header("X-BV-API-Key", "invalid key")
             .get();
         Assert.assertEquals(response.getStatus(), 401);
@@ -98,7 +98,7 @@ public class PollerResourceAuthorizationTest extends JerseyTest {
     }
 
     @Test public void testValidKey() {
-        final Response response = target("/testtenant/poller").request()
+        final Response response = target("/testenv/poller").request()
             .header("X-BV-API-Key", "mytestkey")
             .get();
         Assert.assertEquals(response.getStatus(), 200);

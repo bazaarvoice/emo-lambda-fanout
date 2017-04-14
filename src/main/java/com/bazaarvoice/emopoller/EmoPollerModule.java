@@ -60,7 +60,7 @@ class EmoPollerModule extends AbstractModule {
         bind(EmoPollerConfiguration.class).toInstance(configuration);
         bind(EmoPollerConfiguration.EmoConfiguration.class).toInstance(configuration.getEmoConfiguration());
         bind(EmoPollerConfiguration.LambdaConfiguration.class).toInstance(configuration.getLambdaConfiguration());
-        bind(Map.class).annotatedWith(Names.named("tenantConfigurations")).toInstance(configuration.getTenantConfigurations());
+        bind(Map.class).annotatedWith(Names.named("environmentConfigurations")).toInstance(configuration.getEnvironmentConfigurations());
         bind(String.class).annotatedWith(Names.named("cmk")).toInstance(configuration.getProxyConfiguration().getCMK());
 
         bind(AuthorizationRequestFilter.class).asEagerSingleton();

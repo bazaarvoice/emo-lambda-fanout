@@ -8,7 +8,7 @@ import java.time.Duration;
 public class ConstructedLambdaSubscription implements LambdaSubscription {
     private final String id;
     private final Long version;
-    private final String tenant;
+    private final String environment;
     private final String subscriptionName;
     private final String lambdaArn;
     private final String condition;
@@ -18,10 +18,10 @@ public class ConstructedLambdaSubscription implements LambdaSubscription {
     private final String cypherTextDelegateApiKey;
     private final boolean active;
 
-    public ConstructedLambdaSubscription(final String tenant, final String subscriptionName, final String lambdaArn, final String condition, final Duration claimTtl, final Integer batchSize, final String delegateApiKeyHash, final String cypherTextDelegateApiKey, final boolean active) {
+    public ConstructedLambdaSubscription(final String environment, final String subscriptionName, final String lambdaArn, final String condition, final Duration claimTtl, final Integer batchSize, final String delegateApiKeyHash, final String cypherTextDelegateApiKey, final boolean active) {
         id = null;
         version = null;
-        this.tenant = tenant;
+        this.environment = environment;
         this.subscriptionName = subscriptionName;
         this.lambdaArn = lambdaArn;
         this.condition = condition;
@@ -32,7 +32,7 @@ public class ConstructedLambdaSubscription implements LambdaSubscription {
         this.active = active;
     }
 
-    public String getTenant() { return tenant; }
+    public String getEnvironment() { return environment; }
 
     public String getSubscriptionName() { return subscriptionName; }
 

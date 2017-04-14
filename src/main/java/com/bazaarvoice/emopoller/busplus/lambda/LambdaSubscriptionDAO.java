@@ -15,9 +15,9 @@ public interface LambdaSubscriptionDAO extends Managed {
 
     String saveAndNotifyWatchers(final LambdaSubscription lambdaSubscription);
 
-    Set<LambdaSubscription> getAll(final String tenant);
+    Set<LambdaSubscription> getAll(final String environment);
 
-    LambdaSubscription get(final String tenant, final String lambdaArn);
+    LambdaSubscription get(final String environment, final String lambdaArn);
 
     void deactivate(final String id);
 

@@ -8,37 +8,37 @@ import java.util.Map;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class EmoPollerConfiguration extends Configuration {
-    public EmoPollerConfiguration(@JsonProperty("tenants") final Map<String, TenantConfiguration> tenantConfigurations,
+    public EmoPollerConfiguration(@JsonProperty("environments") final Map<String, EnvironmentConfiguration> environmentConfigurations,
                                   @JsonProperty("emodb") final EmoConfiguration emoConfiguration,
                                   @JsonProperty("lambda") final LambdaConfiguration lambdaConfiguration,
                                   @JsonProperty("poller") final PollerConfiguration pollerConfiguration) {
-        this.tenantConfigurations = tenantConfigurations;
+        this.environmentConfigurations = environmentConfigurations;
         this.emoConfiguration = emoConfiguration;
         this.lambdaConfiguration = lambdaConfiguration;
         this.pollerConfiguration = pollerConfiguration;
     }
 
-    private final Map<String, TenantConfiguration> tenantConfigurations;
+    private final Map<String, EnvironmentConfiguration> environmentConfigurations;
 
-    public Map<String, TenantConfiguration> getTenantConfigurations() { return checkNotNull(tenantConfigurations); }
+    public Map<String, EnvironmentConfiguration> getEnvironmentConfigurations() { return checkNotNull(environmentConfigurations); }
 
-    public static class TenantConfiguration {
-        public TenantConfiguration(@JsonProperty("keyDigestWhitelist") final Map<String, String> keyDigestWhitelist,
-                                   @JsonProperty("emodb") final TenantEmoConfiguration tenantEmoConfiguration) {
+    public static class EnvironmentConfiguration {
+        public EnvironmentConfiguration(@JsonProperty("keyDigestWhitelist") final Map<String, String> keyDigestWhitelist,
+                                        @JsonProperty("emodb") final EnvironmentEmoConfiguration environmentEmoConfiguration) {
             this.keyDigestWhitelist = keyDigestWhitelist;
-            this.tenantEmoConfiguration = tenantEmoConfiguration;
+            this.environmentEmoConfiguration = environmentEmoConfiguration;
         }
 
         private final Map<String, String> keyDigestWhitelist;
 
         public Map<String, String> getKeyDigestWhitelist() { return checkNotNull(keyDigestWhitelist); }
 
-        private final TenantEmoConfiguration tenantEmoConfiguration;
+        private final EnvironmentEmoConfiguration environmentEmoConfiguration;
 
-        public TenantEmoConfiguration getTenantEmoConfiguration() { return checkNotNull(tenantEmoConfiguration); }
+        public EnvironmentEmoConfiguration getEnvironmentEmoConfiguration() { return checkNotNull(environmentEmoConfiguration); }
 
-        public static class TenantEmoConfiguration {
-            public TenantEmoConfiguration(@JsonProperty("baseURL") final String baseURL) {this.baseURL = baseURL;}
+        public static class EnvironmentEmoConfiguration {
+            public EnvironmentEmoConfiguration(@JsonProperty("baseURL") final String baseURL) {this.baseURL = baseURL;}
 
             private final String baseURL;
 

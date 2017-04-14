@@ -55,7 +55,7 @@ public class LambdaSubscriptionManager implements Managed {
         lambdaSubscriptionDAO.registerWatcher("poller-watcher", lambdaSubscription -> {
             final SubscriptionPollerFactory.SubscriptionPoller poller;
             try {
-                poller = subscriptionPollerFactory.produce(lambdaSubscription.getTenant(), lambdaSubscription.getLambdaArn());
+                poller = subscriptionPollerFactory.produce(lambdaSubscription.getEnvironment(), lambdaSubscription.getLambdaArn());
             } catch (IllegalArgumentException e) {
                 LOG.warn("Exception creating poller for subscription: ", e);
                 return;
@@ -79,13 +79,13 @@ public class LambdaSubscriptionManager implements Managed {
         });
     }
 
-    public void register(final String tenant, final String lambdaArn, final Condition condition, final Duration claimTtl, final Integer batchSize, final String delegateApiKey)
+    public void register(final String environment, final String lambdaArn, final Condition condition, final Duration claimTtl, final Integer batchSize, final String delegateApiKey)
         throws NoSuchFunctionException, InsufficientPermissionsException, IllegalArgumentException {
 
-        Preconditions.checkArgument(tenant.matches("[a-z]+"), "tenants must be lowercase alpha only.");
+        Preconditions.checkArgument(environment.matches("[a-z]+"), "environment must be lowercase alpha only.");
         lambdaInvocation.check(lambdaArn);
 
-        final LambdaSubscription subscription = lambdaSubscriptionDAO.get(tenant, lambdaArn);
+        final LambdaSubscription subscription = lambdaSubscriptionDAO.get(environment, lambdaArn);
 
         final String subscriptionName;
         if (subscription == null) {
@@ -97,7 +97,7 @@ public class LambdaSubscriptionManager implements Managed {
         final String cypherTextDelegateApiKey = apiKeyCrypto.encrypt(delegateApiKey, subscriptionName, lambdaArn);
 
         final String id = lambdaSubscriptionDAO.saveAndNotifyWatchers(
-            new ConstructedLambdaSubscription(tenant, subscriptionName, lambdaArn, condition.toString(), claimTtl, batchSize, delegateApiKey, cypherTextDelegateApiKey, true)
+            new ConstructedLambdaSubscription(environment, subscriptionName, lambdaArn, condition.toString(), claimTtl, batchSize, delegateApiKey, cypherTextDelegateApiKey, true)
         );
 
         pollers.get(id).ensureSubscribed();
@@ -106,21 +106,21 @@ public class LambdaSubscriptionManager implements Managed {
         processPool.resetErrorCount(id);
     }
 
-    public void deactivate(final String tenant, final String lambdaArn, final String delegateApiKey) {
-        final LambdaSubscription subscription = get(tenant, lambdaArn, delegateApiKey); // checks permission
+    public void deactivate(final String environment, final String lambdaArn, final String delegateApiKey) {
+        final LambdaSubscription subscription = get(environment, lambdaArn, delegateApiKey); // checks permission
         lambdaSubscriptionDAO.deactivate(subscription.getId());
     }
 
-    public void activate(final String tenant, final String lambdaArn, final String delegateApiKey) {
-        final LambdaSubscription subscription = get(tenant, lambdaArn, delegateApiKey); // checks permission
+    public void activate(final String environment, final String lambdaArn, final String delegateApiKey) {
+        final LambdaSubscription subscription = get(environment, lambdaArn, delegateApiKey); // checks permission
         lambdaSubscriptionDAO.activate(subscription.getId());
     }
 
     public static class UnauthorizedException extends RuntimeException {}
 
-    public List<LambdaSubscription> getAll(final String tenant, final String key) {
+    public List<LambdaSubscription> getAll(final String environment, final String key) {
         final ImmutableList.Builder<LambdaSubscription> result = ImmutableList.builder();
-        for (LambdaSubscription subscription : lambdaSubscriptionDAO.getAll(tenant)) {
+        for (LambdaSubscription subscription : lambdaSubscriptionDAO.getAll(environment)) {
             if (subscription != null) {
                 if (HashUtil.verifyArgon2(subscription.getDelegateApiKeyHash(), key)) {
                     result.add(subscription);
@@ -130,13 +130,13 @@ public class LambdaSubscriptionManager implements Managed {
         return result.build();
     }
 
-    public Integer size(final String tenant, final String lambdaArn, final String delegateApiKey) {
-        final LambdaSubscription subscription = get(tenant, lambdaArn, delegateApiKey);
+    public Integer size(final String environment, final String lambdaArn, final String delegateApiKey) {
+        final LambdaSubscription subscription = get(environment, lambdaArn, delegateApiKey);
         return pollers.get(subscription.getId()).size();
     }
 
-    public LambdaSubscription get(final String tenant, final String lambdaArn, final String delegateApiKey) {
-        final LambdaSubscription subscription = lambdaSubscriptionDAO.get(tenant, lambdaArn);
+    public LambdaSubscription get(final String environment, final String lambdaArn, final String delegateApiKey) {
+        final LambdaSubscription subscription = lambdaSubscriptionDAO.get(environment, lambdaArn);
         if (HashUtil.verifyArgon2(subscription.getDelegateApiKeyHash(), delegateApiKey)) {
             return subscription;
         } else {

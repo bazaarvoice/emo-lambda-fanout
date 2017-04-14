@@ -38,7 +38,7 @@ public class SubscriptionPollerFactory {
     private final ProcessPool processPool;
     private final MetricRegistrar metricRegistrar;
     private final HealthCheckRegistry healthCheckRegistry;
-    private final Map<String, EmoPollerConfiguration.TenantConfiguration> tenantConfigurations;
+    private final Map<String, EmoPollerConfiguration.EnvironmentConfiguration> environmentConfigurations;
     private final Client client;
 
     @Inject
@@ -51,7 +51,7 @@ public class SubscriptionPollerFactory {
                                      final HealthCheckRegistry healthCheckRegistry) {
         this.lambdaSubscriptionDAO = lambdaSubscriptionDAO;
         this.lambdaConfiguration = pollerConfiguration.getLambdaConfiguration();
-        this.tenantConfigurations = pollerConfiguration.getTenantConfigurations();
+        this.environmentConfigurations = pollerConfiguration.getEnvironmentConfigurations();
         this.apiKeyCrypto = apiKeyCrypto;
         this.processPool = processPool;
         this.metricRegistrar = metricRegistrar;
@@ -59,27 +59,27 @@ public class SubscriptionPollerFactory {
         this.client = client;
     }
 
-    SubscriptionPoller produce(final String tenant, final String lambdaArn) {
-        Preconditions.checkArgument(tenantConfigurations.containsKey(tenant), "Unknown tenant: [" + tenant + "] for [" + lambdaArn + "]");
-        return new SubscriptionPoller(tenant, lambdaArn);
+    SubscriptionPoller produce(final String environment, final String lambdaArn) {
+        Preconditions.checkArgument(environmentConfigurations.containsKey(environment), "Unknown environment: [" + environment + "] for [" + lambdaArn + "]");
+        return new SubscriptionPoller(environment, lambdaArn);
     }
 
     class SubscriptionPoller extends AbstractScheduledService {
         private final Logger LOG;
         private final AtomicReference<Date> lastPoll;
 
-        private final String tenant;
+        private final String environment;
         private final String lambdaArn;
         private final DataBusClient dataBusClient;
 
-        private SubscriptionPoller(final String tenant, final String lambdaArn) {
-            this.tenant = tenant;
+        private SubscriptionPoller(final String environment, final String lambdaArn) {
+            this.environment = environment;
             this.lambdaArn = lambdaArn;
-            this.dataBusClient = new DataBusClient(client, tenantConfigurations.get(tenant).getTenantEmoConfiguration().getBaseURL(), metricRegistrar);
+            this.dataBusClient = new DataBusClient(client, environmentConfigurations.get(environment).getEnvironmentEmoConfiguration().getBaseURL(), metricRegistrar);
 
-            LOG = LoggerFactory.getLogger("SubscriptionPoller-" + tenant + "-" + lambdaArn);
+            LOG = LoggerFactory.getLogger("SubscriptionPoller-" + environment + "-" + lambdaArn);
             lastPoll = new AtomicReference<>(null);
-            healthCheckRegistry.register("LambdaSubscriptionManager.poller." + tenant + lambdaArn, new HealthCheck() {
+            healthCheckRegistry.register("LambdaSubscriptionManager.poller." + environment + "-" + lambdaArn, new HealthCheck() {
                 @Override protected Result check() throws Exception {
                     final String lastPoll = String.format("Last poll: [%s]", String.valueOf(SubscriptionPoller.this.lastPoll.get()));
                     return isRunning() ? Result.healthy(lastPoll) : Result.unhealthy("poller is not running. " + lastPoll);
@@ -88,7 +88,7 @@ public class SubscriptionPollerFactory {
         }
 
         void ensureSubscribed() {
-            final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(tenant, lambdaArn);
+            final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(environment, lambdaArn);
             final String delegateApiKey = apiKeyCrypto.decrypt(lambdaSubscription.getCypherTextDelegateApiKey(), lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn());
             dataBusClient.subscribe(
                 lambdaSubscription.getSubscriptionName(),
@@ -99,24 +99,24 @@ public class SubscriptionPollerFactory {
         }
 
         Integer size() {
-            final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(tenant, lambdaArn);
+            final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(environment, lambdaArn);
             final String delegateApiKey = apiKeyCrypto.decrypt(lambdaSubscription.getCypherTextDelegateApiKey(), lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn());
             return dataBusClient.size(lambdaSubscription.getSubscriptionName(), 1000, delegateApiKey);
         }
 
-        @Override protected String serviceName() { return "poller-" + tenant + lambdaArn.replace(':', '-'); }
+        @Override protected String serviceName() { return "poller-" + environment + lambdaArn.replace(':', '-'); }
 
         @Override protected Scheduler scheduler() { return Scheduler.newFixedDelaySchedule(0, 100, TimeUnit.MILLISECONDS); }
 
         @Override protected void runOneIteration() throws Exception {
-            final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(tenant, lambdaArn);
+            final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(environment, lambdaArn);
 
             // first deal with active/inactive state business
 
             final String gaugeName = "emo_lambda_fanout.subscription.size";
             final ImmutableMap<String, String> gaugeTags = ImmutableMap.of(
                 "lambda_arn", lambdaSubscription.getLambdaArn().replaceAll("[:]", "_"),
-                "tenant", lambdaSubscription.getTenant()
+                "environment", lambdaSubscription.getEnvironment()
             );
 
             if (!lambdaSubscription.isActive()) {
