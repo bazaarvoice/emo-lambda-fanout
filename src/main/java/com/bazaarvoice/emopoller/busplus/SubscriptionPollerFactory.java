@@ -108,7 +108,7 @@ public class SubscriptionPollerFactory {
 
         @Override protected Scheduler scheduler() { return Scheduler.newFixedDelaySchedule(0, 100, TimeUnit.MILLISECONDS); }
 
-        @Override protected void runOneIteration() throws Exception {
+        private void innerRunOneIteration() throws Exception {
             final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(environment, lambdaArn);
 
             // first deal with active/inactive state business
@@ -172,6 +172,14 @@ public class SubscriptionPollerFactory {
             }
 
             lastPoll.set(new Date());
+        }
+
+        @Override protected void runOneIteration() throws Exception {
+            try {
+                innerRunOneIteration();
+            } catch (Exception e) {
+                LOG.error("Uncaught exception in runOneIteration.", e);
+            }
         }
 
         void start() { startAsync().awaitRunning(); }

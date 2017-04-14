@@ -153,7 +153,7 @@ public class ProcessPool implements Managed {
                 LOG.info(String.format("Deactivating: Error running [%s] for sub[%s]", lambdaSubscription.getLambdaArn(), lambdaSubscription.getSubscriptionName()), e);
                 lambdaSubscriptionDAO.deactivate(lambdaSubscription.getId());
             }
-        } catch (Exception e) { // so we're sure to also catch any exceptions thrown in the catch blocks
+        } catch (Exception e) {
             LOG.error(String.format("Unhandled exception invoking function [%s] for sub[%s]", lambdaSubscription.getLambdaArn(), lambdaSubscription.getSubscriptionName()), e);
         }
         totalTimer.stop();
