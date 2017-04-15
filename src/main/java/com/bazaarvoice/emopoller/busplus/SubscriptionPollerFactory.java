@@ -132,7 +132,14 @@ public class SubscriptionPollerFactory {
 
             metricRegistrar.register(
                 gaugeName, gaugeTags,
-                () -> dataBusClient.size(lambdaSubscription.getSubscriptionName(), 1000, delegateApiKey)
+                () -> {
+                    try {
+                        return dataBusClient.size(lambdaSubscription.getSubscriptionName(), 1000, delegateApiKey);
+                    } catch (Exception e) {
+                        LOG.error(String.format("Error in gauge for [%s] [%s]", lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn()),e);
+                        return null;
+                    }
+                }
             );
 
             // keep subscription alive
