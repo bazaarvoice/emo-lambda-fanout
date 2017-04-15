@@ -26,6 +26,14 @@ import com.google.common.util.concurrent.AbstractScheduledService;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.name.Names;
+import org.apache.http.HttpHost;
+import org.apache.http.conn.routing.HttpRoute;
+import org.apache.http.impl.conn.PoolingClientConnectionManager;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.glassfish.jersey.apache.connector.ApacheClientProperties;
+import org.glassfish.jersey.apache.connector.ApacheConnectorProvider;
+import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.client.ClientProperties;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
@@ -67,7 +75,7 @@ class EmoPollerModule extends AbstractModule {
         bind(PollerResource.class).asEagerSingleton();
         bind(DataBusClient.class).asEagerSingleton();
 
-        bind(Client.class).toInstance(ClientBuilder.newClient());
+        bind(Client.class).toInstance(provideClient());
 
         bind(LambdaSubscriptionDAO.class).to(LambdaSubscriptionDAOImpl.class).asEagerSingleton();
         bind(SubscriptionPollerFactory.class).asEagerSingleton();
@@ -89,6 +97,24 @@ class EmoPollerModule extends AbstractModule {
         tags.put("application", "emo_lambda_fanout");
 
         bind(MetricsTelemetry.class).toInstance(new MetricsTelemetry(metrics, ImmutableMap.copyOf(tags), AbstractScheduledService.Scheduler.newFixedDelaySchedule(1, 1, TimeUnit.MINUTES)));
+    }
+
+    private Client provideClient() {
+        ClientConfig clientConfig = new ClientConfig();
+
+        // values are in milliseconds
+        clientConfig.property(ClientProperties.READ_TIMEOUT, 30_000);
+        clientConfig.property(ClientProperties.CONNECT_TIMEOUT, 12_000);
+
+        PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
+        connectionManager.setMaxTotal(1000);
+        connectionManager.setDefaultMaxPerRoute(100);
+
+        clientConfig.property(ApacheClientProperties.CONNECTION_MANAGER, connectionManager);
+
+        clientConfig.connectorProvider(new ApacheConnectorProvider());
+
+        return ClientBuilder.newClient(clientConfig);
     }
 
     @Provides public AWSLambda awsLambda() {
