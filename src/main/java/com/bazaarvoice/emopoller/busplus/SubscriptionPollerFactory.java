@@ -68,6 +68,8 @@ public class SubscriptionPollerFactory {
     class SubscriptionPoller extends AbstractScheduledService {
         private final Logger LOG;
         private final AtomicReference<Date> lastPoll;
+        private final AtomicReference<DateTime> lastSubscribe;
+
 
         private final String environment;
         private final String lambdaArn;
@@ -80,10 +82,12 @@ public class SubscriptionPollerFactory {
 
             LOG = LoggerFactory.getLogger("SubscriptionPoller-" + environment + "-" + lambdaArn);
             lastPoll = new AtomicReference<>(null);
+            lastSubscribe = new AtomicReference<>(null);
             healthCheckRegistry.register("LambdaSubscriptionManager.poller." + environment + "-" + lambdaArn, new HealthCheck() {
                 @Override protected Result check() throws Exception {
                     final String lastPoll = String.format("Last poll: [%s]", String.valueOf(SubscriptionPoller.this.lastPoll.get()));
-                    return isRunning() ? Result.healthy(lastPoll) : Result.unhealthy("poller is not running. " + lastPoll);
+                    final String lastSubscribe = String.format("Last subscribe: [%s]", String.valueOf(SubscriptionPoller.this.lastSubscribe.get()));
+                    return isRunning() ? Result.healthy(lastPoll) : Result.unhealthy("poller is not running. " + lastPoll + " " + lastSubscribe);
                 }
             });
         }
@@ -109,8 +113,6 @@ public class SubscriptionPollerFactory {
         @Override protected String serviceName() { return "poller-" + environment + lambdaArn.replace(':', '-'); }
 
         @Override protected Scheduler scheduler() { return Scheduler.newFixedDelaySchedule(0, 100, TimeUnit.MILLISECONDS); }
-
-        private AtomicReference<DateTime> lastSubscribe = new AtomicReference<>(null);
 
         private void innerRunOneIteration() throws Exception {
             final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(environment, lambdaArn);
