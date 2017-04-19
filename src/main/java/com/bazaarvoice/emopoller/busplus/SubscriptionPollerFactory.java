@@ -15,6 +15,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.AbstractScheduledService;
 import com.google.inject.Inject;
+import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,6 +97,7 @@ public class SubscriptionPollerFactory {
                 SUBSCRIPTION_TTL,
                 EVENT_TTL,
                 delegateApiKey);
+            lastSubscribe.set(new DateTime());
         }
 
         Integer size() {
@@ -107,6 +109,8 @@ public class SubscriptionPollerFactory {
         @Override protected String serviceName() { return "poller-" + environment + lambdaArn.replace(':', '-'); }
 
         @Override protected Scheduler scheduler() { return Scheduler.newFixedDelaySchedule(0, 100, TimeUnit.MILLISECONDS); }
+
+        private AtomicReference<DateTime> lastSubscribe = new AtomicReference<>(null);
 
         private void innerRunOneIteration() throws Exception {
             final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(environment, lambdaArn);
@@ -136,19 +140,28 @@ public class SubscriptionPollerFactory {
                     try {
                         return dataBusClient.size(lambdaSubscription.getSubscriptionName(), 1000, delegateApiKey);
                     } catch (Exception e) {
-                        LOG.error(String.format("Error in gauge for [%s] [%s]", lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn()),e);
+                        LOG.error(String.format("Error in gauge for [%s] [%s]", lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn()), e);
                         return null;
                     }
                 }
             );
 
-            // keep subscription alive
-            dataBusClient.subscribe(
-                lambdaSubscription.getSubscriptionName(),
-                lambdaSubscription.getCondition(),
-                SUBSCRIPTION_TTL,
-                EVENT_TTL,
-                delegateApiKey);
+            // we'll keep the subscription around for at least a day and renew at most hourly
+            // if the subscription fails, we bomb out and try again in 100ms.
+            final DateTime lastSubscription = lastSubscribe.get();
+            if (SUBSCRIPTION_TTL.getSeconds() < 60 * 60 * 24) {
+                throw new IllegalArgumentException("subscription ttl must be greater than one day. Was " + SUBSCRIPTION_TTL);
+            }
+            if (lastSubscription == null || lastSubscription.isBefore(new DateTime().minusHours(1))) {
+                // keep subscription alive
+                dataBusClient.subscribe(
+                    lambdaSubscription.getSubscriptionName(),
+                    lambdaSubscription.getCondition(),
+                    SUBSCRIPTION_TTL,
+                    EVENT_TTL,
+                    delegateApiKey);
+                lastSubscribe.set(new DateTime());
+            }
 
             List<JsonNode> poll = dataBusClient.poll(
                 lambdaSubscription.getSubscriptionName(),
