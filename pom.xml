@@ -12,7 +12,7 @@
 
     <groupId>com.bazaarvoice.emopoller</groupId>
     <artifactId>emo-lambda-fanout</artifactId>
-    <version>0.2.14-SNAPSHOT</version>
+    <version>0.2.14</version>
     <packaging>jar</packaging>
 
     <properties>
