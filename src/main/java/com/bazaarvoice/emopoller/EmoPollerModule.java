@@ -96,7 +96,7 @@ class EmoPollerModule extends AbstractModule {
         final Map<String, String> tags = new HashMap<>();
         tags.put("application", "emo_lambda_fanout");
 
-        bind(MetricsTelemetry.class).toInstance(new MetricsTelemetry(metrics, ImmutableMap.copyOf(tags), AbstractScheduledService.Scheduler.newFixedDelaySchedule(1, 1, TimeUnit.MINUTES)));
+        bind(MetricsTelemetry.class).toInstance(new MetricsTelemetry(metrics, ImmutableMap.copyOf(tags), AbstractScheduledService.Scheduler.newFixedDelaySchedule(0, 10, TimeUnit.SECONDS)));
     }
 
     private Client provideClient() {
