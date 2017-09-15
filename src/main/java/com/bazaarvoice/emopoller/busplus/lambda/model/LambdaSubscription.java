@@ -14,6 +14,8 @@ public interface LambdaSubscription extends Versioned {
 
     String getCondition();
 
+    String getDocCondition();
+
     Duration getClaimTtl();
 
     String getDelegateApiKeyHash();

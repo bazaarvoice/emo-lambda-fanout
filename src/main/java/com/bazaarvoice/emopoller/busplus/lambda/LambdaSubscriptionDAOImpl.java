@@ -71,6 +71,8 @@ public class LambdaSubscriptionDAOImpl implements LambdaSubscriptionDAO, Managed
 
         public String getCondition() { return jsonNode.path("condition").textValue(); }
 
+        public String getDocCondition() { return jsonNode.path("docCondition").textValue(); }
+
         public Duration getClaimTtl() { return Duration.ofSeconds(jsonNode.path("claimTtl").intValue()); }
 
         public String getDelegateApiKeyHash() { return jsonNode.path("delegateApiKeyHash").asText(""); }
@@ -282,6 +284,7 @@ public class LambdaSubscriptionDAOImpl implements LambdaSubscriptionDAO, Managed
             .put("subscriptionName", lambdaSubscription.getSubscriptionName())
             .put("lambdaArn", lambdaSubscription.getLambdaArn())
             .put("condition", lambdaSubscription.getCondition())
+            .put("docCondition", lambdaSubscription.getDocCondition())
             .put("claimTtl", lambdaSubscription.getClaimTtl().getSeconds())
             .put("delegateApiKeyCypherText", lambdaSubscription.getCypherTextDelegateApiKey())
             .put("delegateApiKeyHash", HashUtil.argon2hash(lambdaSubscription.getDelegateApiKeyHash()))

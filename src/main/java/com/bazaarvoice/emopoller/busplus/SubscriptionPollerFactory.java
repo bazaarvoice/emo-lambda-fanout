@@ -1,16 +1,21 @@
 package com.bazaarvoice.emopoller.busplus;
 
+import com.bazaarvoice.emodb.sor.condition.Condition;
+import com.bazaarvoice.emodb.sor.condition.eval.ConditionEvaluator;
+import com.bazaarvoice.emodb.sor.delta.deser.DeltaParser;
 import com.bazaarvoice.emopoller.EmoPollerConfiguration;
 import com.bazaarvoice.emopoller.busplus.kms.ApiKeyCrypto;
 import com.bazaarvoice.emopoller.busplus.lambda.LambdaSubscriptionDAO;
 import com.bazaarvoice.emopoller.busplus.lambda.model.LambdaSubscription;
 import com.bazaarvoice.emopoller.emo.DataBusClient;
 import com.bazaarvoice.emopoller.metrics.MetricRegistrar;
+import com.bazaarvoice.emopoller.util.JsonUtil;
 import com.codahale.metrics.Timer;
 import com.codahale.metrics.health.HealthCheck;
 import com.codahale.metrics.health.HealthCheckRegistry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.AbstractScheduledService;
@@ -120,13 +125,13 @@ public class SubscriptionPollerFactory {
             // first deal with active/inactive state business
 
             final String gaugeName = "emo_lambda_fanout.subscription.size";
-            final ImmutableMap<String, String> gaugeTags = ImmutableMap.of(
+            final ImmutableMap<String, String> tags = ImmutableMap.of(
                 "lambda_arn", lambdaSubscription.getLambdaArn().replaceAll("[:]", "_"),
                 "environment", lambdaSubscription.getEnvironment()
             );
 
             if (!lambdaSubscription.isActive()) {
-                metricRegistrar.removeGauge(gaugeName, gaugeTags);
+                metricRegistrar.removeGauge(gaugeName, tags);
 
                 Thread.sleep(30_000L); // if not active, wait 30s before polling again.
                 return;
@@ -137,7 +142,7 @@ public class SubscriptionPollerFactory {
             final String delegateApiKey = apiKeyCrypto.decrypt(lambdaSubscription.getCypherTextDelegateApiKey(), lambdaSubscription.getSubscriptionName(), lambdaSubscription.getLambdaArn());
 
             metricRegistrar.register(
-                gaugeName, gaugeTags,
+                gaugeName, tags,
                 () -> {
                     try {
                         return dataBusClient.size(lambdaSubscription.getSubscriptionName(), 1000, delegateApiKey);
@@ -165,15 +170,37 @@ public class SubscriptionPollerFactory {
                 lastSubscribe.set(new DateTime());
             }
 
-            List<JsonNode> poll = dataBusClient.poll(
+            final List<JsonNode> superSetPoll = dataBusClient.poll(
                 lambdaSubscription.getSubscriptionName(),
                 lambdaSubscription.getClaimTtl(),
                 lambdaConfiguration.getPollSize(),
                 true,
                 delegateApiKey);
 
+            final List<JsonNode> poll;
+            if (lambdaSubscription.getDocCondition() == null) {
+                poll = superSetPoll;
+            } else {
+                final Condition docCondition = DeltaParser.parseCondition(lambdaSubscription.getDocCondition());
+                final ImmutableList.Builder<JsonNode> toPoll = ImmutableList.builder();
+                final ImmutableList.Builder<String> toAck = ImmutableList.builder();
+                for (JsonNode node : superSetPoll) {
+                    if (ConditionEvaluator.eval(docCondition, JsonUtil.mapper().convertValue(node.get("content"), Object.class), null)) {
+                        toPoll.add(node);
+                    } else {
+                        toAck.add(node.get("eventKey").asText());
+                    }
+                }
+                final ImmutableList<String> acks = toAck.build();
+                dataBusClient.acknowledge(lambdaSubscription.getSubscriptionName(), acks, delegateApiKey);
+                metricRegistrar.counter("emo_lambda_fanout.poll.filtered", tags).inc(acks.size());
+                poll = toPoll.build();
+            }
+
+            metricRegistrar.counter("emo_lambda_fanout.poll.polled", tags).inc(poll.size());
+
             metricRegistrar
-                .histogram("emo_lambda_fanout.poll.events", ImmutableMap.of("lambda_arn", lambdaSubscription.getLambdaArn().replaceAll("[:]", "_")))
+                .histogram("emo_lambda_fanout.poll.events", tags)
                 .update(poll.size());
 
             LOG.info("Polled [{}] events for arn[{}]", poll.size(), lambdaSubscription.getLambdaArn());

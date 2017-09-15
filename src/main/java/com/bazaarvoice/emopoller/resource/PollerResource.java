@@ -1,6 +1,7 @@
 package com.bazaarvoice.emopoller.resource;
 
-import com.bazaarvoice.emodb.sor.condition.Conditions;
+import com.bazaarvoice.emodb.sor.condition.Condition;
+import com.bazaarvoice.emodb.sor.delta.deser.DeltaParser;
 import com.bazaarvoice.emodb.sor.delta.deser.ParseException;
 import com.bazaarvoice.emopoller.busplus.LambdaSubscriptionManager;
 import com.bazaarvoice.emopoller.busplus.lambda.InsufficientPermissionsException;
@@ -27,12 +28,16 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.time.Duration;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.bazaarvoice.emopoller.resource.AuthorizationRequestFilter.APIKEY_AUTH_HEADER;
 
 @Path("/{environment}/poller")
 public class PollerResource {
     private static final String APPLICATION_X_JSON_DELTA = "application/x.json-delta";
+    private static final Pattern MULTI_CONDITION_REGEX = Pattern.compile("^table:([^\n]+)\ndoc:(.+)$");
 
     private final LambdaSubscriptionManager lambdaSubscriptionManager;
 
@@ -53,8 +58,26 @@ public class PollerResource {
                                 final String condition) {
         if (lambdaArn == null) throw new WebApplicationException("lambdaArn is required", 400);
         if (claimTtl == null) throw new WebApplicationException("claimTtl is required", 400);
+
+        final Condition tableCondition;
+        final Optional<Condition> docCondition;
+        {
+            final Matcher multiconMatcher = MULTI_CONDITION_REGEX.matcher(condition);
+            if (multiconMatcher.matches()) {
+                // then this is a special conditional delta
+                final String tableDelta = multiconMatcher.group(1);
+                final String docDelta = multiconMatcher.group(2);
+                tableCondition = DeltaParser.parseCondition(tableDelta);
+                docCondition = Optional.of(DeltaParser.parseCondition(docDelta));
+            } else {
+                // regular delta. parse it and move on
+                tableCondition = DeltaParser.parseCondition(condition);
+                docCondition = Optional.empty();
+            }
+        }
+
         try {
-            lambdaSubscriptionManager.register(environment, lambdaArn, Conditions.fromString(condition), Duration.ofSeconds(claimTtl.get()), batchSize == null ? null : batchSize.get(), getKey(headers));
+            lambdaSubscriptionManager.register(environment, lambdaArn, tableCondition, docCondition, Duration.ofSeconds(claimTtl.get()), batchSize == null ? null : batchSize.get(), getKey(headers));
         } catch (NoSuchFunctionException | ParseException e) {
             throw new WebApplicationException(e.getMessage(), 404);
         } catch (InsufficientPermissionsException e) {

@@ -1,9 +1,11 @@
 package com.bazaarvoice.emopoller.busplus.lambda.model;
 
+import com.bazaarvoice.emodb.sor.condition.Condition;
 import com.bazaarvoice.emopoller.util.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.time.Duration;
+import java.util.Optional;
 
 public class ConstructedLambdaSubscription implements LambdaSubscription {
     private final String id;
@@ -17,14 +19,16 @@ public class ConstructedLambdaSubscription implements LambdaSubscription {
     private final String delegateApiKeyHash;
     private final String cypherTextDelegateApiKey;
     private final boolean active;
+    private final String docCondition;
 
-    public ConstructedLambdaSubscription(final String environment, final String subscriptionName, final String lambdaArn, final String condition, final Duration claimTtl, final Integer batchSize, final String delegateApiKeyHash, final String cypherTextDelegateApiKey, final boolean active) {
+    public ConstructedLambdaSubscription(final String environment, final String subscriptionName, final String lambdaArn, final String tableCondition, final Optional<Condition> docCondition, final Duration claimTtl, final Integer batchSize, final String delegateApiKeyHash, final String cypherTextDelegateApiKey, final boolean active) {
         id = null;
         version = null;
         this.environment = environment;
         this.subscriptionName = subscriptionName;
         this.lambdaArn = lambdaArn;
-        this.condition = condition;
+        this.condition = tableCondition;
+        this.docCondition = docCondition.map(Condition::toString).orElse(null);
         this.claimTtl = claimTtl;
         this.batchSize = batchSize;
         this.delegateApiKeyHash = delegateApiKeyHash;
@@ -39,6 +43,8 @@ public class ConstructedLambdaSubscription implements LambdaSubscription {
     public String getLambdaArn() { return lambdaArn; }
 
     public String getCondition() { return condition; }
+
+    public String getDocCondition() { return docCondition; }
 
     public Duration getClaimTtl() { return claimTtl; }
 

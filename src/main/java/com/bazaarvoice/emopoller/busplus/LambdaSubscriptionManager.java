@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -79,7 +80,7 @@ public class LambdaSubscriptionManager implements Managed {
         });
     }
 
-    public void register(final String environment, final String lambdaArn, final Condition condition, final Duration claimTtl, final Integer batchSize, final String delegateApiKey)
+    public void register(final String environment, final String lambdaArn, final Condition tableCondition, final Optional<Condition> docCondition, final Duration claimTtl, final Integer batchSize, final String delegateApiKey)
         throws NoSuchFunctionException, InsufficientPermissionsException, IllegalArgumentException {
 
         Preconditions.checkArgument(environment.matches("[a-z]+"), "environment must be lowercase alpha only.");
@@ -97,7 +98,7 @@ public class LambdaSubscriptionManager implements Managed {
         final String cypherTextDelegateApiKey = apiKeyCrypto.encrypt(delegateApiKey, subscriptionName, lambdaArn);
 
         final String id = lambdaSubscriptionDAO.saveAndNotifyWatchers(
-            new ConstructedLambdaSubscription(environment, subscriptionName, lambdaArn, condition.toString(), claimTtl, batchSize, delegateApiKey, cypherTextDelegateApiKey, true)
+            new ConstructedLambdaSubscription(environment, subscriptionName, lambdaArn, tableCondition.toString(), docCondition, claimTtl, batchSize, delegateApiKey, cypherTextDelegateApiKey, true)
         );
 
         pollers.get(id).ensureSubscribed();
