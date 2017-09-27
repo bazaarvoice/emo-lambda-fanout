@@ -192,7 +192,11 @@ public class SubscriptionPollerFactory {
                     }
                 }
                 final ImmutableList<String> acks = toAck.build();
-                dataBusClient.acknowledge(lambdaSubscription.getSubscriptionName(), acks, delegateApiKey);
+                if (!acks.isEmpty()) {
+                    final Timer.Context time = metricRegistrar.timer("emo_lambda_fanout.poll.filteredAckTime", tags).time();
+                    dataBusClient.acknowledge(lambdaSubscription.getSubscriptionName(), acks, delegateApiKey);
+                    time.stop();
+                }
                 metricRegistrar.counter("emo_lambda_fanout.poll.filtered", tags).inc(acks.size());
                 poll = toPoll.build();
             }
