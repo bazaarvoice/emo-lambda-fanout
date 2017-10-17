@@ -148,7 +148,8 @@ public class LambdaSubscriptionManager implements Managed {
     @Override public void start() throws Exception {
         startedLock.lock();
         try {
-            pollers.values().forEach(SubscriptionPollerFactory.SubscriptionPoller::start);
+            pollers.values().forEach(SubscriptionPollerFactory.SubscriptionPoller::startAsync);
+            pollers.values().forEach(SubscriptionPollerFactory.SubscriptionPoller::awaitRunning);
             started = true;
         } finally {
             startedLock.unlock();
@@ -156,6 +157,7 @@ public class LambdaSubscriptionManager implements Managed {
     }
 
     @Override public void stop() throws Exception {
-        pollers.values().forEach(SubscriptionPollerFactory.SubscriptionPoller::stop);
+        pollers.values().forEach(SubscriptionPollerFactory.SubscriptionPoller::stopAsync);
+        pollers.values().forEach(SubscriptionPollerFactory.SubscriptionPoller::awaitTerminated);
     }
 }

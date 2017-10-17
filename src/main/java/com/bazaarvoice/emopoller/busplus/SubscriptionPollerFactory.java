@@ -136,6 +136,7 @@ public class SubscriptionPollerFactory {
         }
 
         @Override protected void doStop() {
+            keepRunning.set(false);
             pollerPool.shutdown();
         }
 
