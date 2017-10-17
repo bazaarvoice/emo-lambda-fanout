@@ -18,7 +18,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.AbstractScheduledService;
+import com.google.common.util.concurrent.AbstractService;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.Inject;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
@@ -29,7 +30,9 @@ import java.time.Duration;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -70,15 +73,19 @@ public class SubscriptionPollerFactory {
         return new SubscriptionPoller(environment, lambdaArn);
     }
 
-    class SubscriptionPoller extends AbstractScheduledService {
+    class SubscriptionPoller extends AbstractService {
         private final Logger LOG;
         private final AtomicReference<Date> lastPoll;
         private final AtomicReference<DateTime> lastSubscribe;
 
+        private final ExecutorService pollerPool;
+        private final Runnable task;
 
         private final String environment;
         private final String lambdaArn;
         private final DataBusClient dataBusClient;
+
+        private final AtomicBoolean keepRunning;
 
         private SubscriptionPoller(final String environment, final String lambdaArn) {
             this.environment = environment;
@@ -95,6 +102,41 @@ public class SubscriptionPollerFactory {
                     return isRunning() ? Result.healthy(lastPoll) : Result.unhealthy("poller is not running. " + lastPoll + " " + lastSubscribe);
                 }
             });
+
+            final String serviceName = "poller-" + environment + lambdaArn.replace(':', '-');
+
+            pollerPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setDaemon(false).setNameFormat(serviceName + "-%d").build());
+            keepRunning = new AtomicBoolean(true);
+            task = () -> {
+                while (keepRunning.get()) {
+                    try {
+                        innerRunOneIteration();
+                    } catch (Exception e) {
+                        LOG.error(String.format("Uncaught exception in Subscription Poller [%s][%s]", environment, lambdaArn), e);
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e1) {
+                            LOG.info("Sleep got interrupted. Shutting down...");
+                            keepRunning.set(false);
+                        }
+                    }
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        LOG.info("Sleep got interrupted. Shutting down...");
+                        keepRunning.set(false);
+                    }
+                }
+            };
+        }
+
+        @Override protected void doStart() {
+            // just execute the task again to add concurrency to the poller.
+            pollerPool.execute(task);
+        }
+
+        @Override protected void doStop() {
+            pollerPool.shutdown();
         }
 
         void ensureSubscribed() {
@@ -115,10 +157,6 @@ public class SubscriptionPollerFactory {
             return dataBusClient.size(lambdaSubscription.getSubscriptionName(), 1000, delegateApiKey);
         }
 
-        @Override protected String serviceName() { return "poller-" + environment + lambdaArn.replace(':', '-'); }
-
-        @Override protected Scheduler scheduler() { return Scheduler.newFixedDelaySchedule(0, 100, TimeUnit.MILLISECONDS); }
-
         private void innerRunOneIteration() throws Exception {
             final LambdaSubscription lambdaSubscription = lambdaSubscriptionDAO.get(environment, lambdaArn);
 
@@ -133,7 +171,7 @@ public class SubscriptionPollerFactory {
             if (!lambdaSubscription.isActive()) {
                 metricRegistrar.removeGauge(gaugeName, tags);
 
-                Thread.sleep(30_000L); // if not active, wait 30s before polling again.
+                Thread.sleep(10_000L); // if not active, wait 10s before polling again.
                 return;
             }
 
@@ -153,91 +191,92 @@ public class SubscriptionPollerFactory {
                 }
             );
 
-            // we'll keep the subscription around for at least a day and renew at most hourly
-            // if the subscription fails, we bomb out and try again in 100ms.
-            final DateTime lastSubscription = lastSubscribe.get();
-            if (SUBSCRIPTION_TTL.getSeconds() < 60 * 60 * 24) {
-                throw new IllegalArgumentException("subscription ttl must be greater than one day. Was " + SUBSCRIPTION_TTL);
-            }
-            if (lastSubscription == null || lastSubscription.isBefore(new DateTime().minusHours(1))) {
-                // keep subscription alive
-                dataBusClient.subscribe(
+            boolean keepPolling = true;
+            while (keepPolling) {
+                // we'll keep the subscription around for at least a day and renew at most hourly
+                // if the subscription fails, we bomb out and try again in 100ms.
+                final DateTime lastSubscription = lastSubscribe.get();
+                if (SUBSCRIPTION_TTL.getSeconds() < 60 * 60 * 24) {
+                    throw new IllegalArgumentException("subscription ttl must be greater than one day. Was " + SUBSCRIPTION_TTL);
+                }
+                if (lastSubscription == null || lastSubscription.isBefore(new DateTime().minusHours(1))) {
+                    // check again whether the subscription is active
+                    if (!lambdaSubscriptionDAO.get(environment, lambdaArn).isActive()) {
+                        return;
+                    }
+
+                    // keep subscription alive
+                    dataBusClient.subscribe(
+                        lambdaSubscription.getSubscriptionName(),
+                        lambdaSubscription.getCondition(),
+                        SUBSCRIPTION_TTL,
+                        EVENT_TTL,
+                        delegateApiKey);
+                    lastSubscribe.set(new DateTime());
+                }
+
+                final List<JsonNode> superSetPoll = dataBusClient.poll(
                     lambdaSubscription.getSubscriptionName(),
-                    lambdaSubscription.getCondition(),
-                    SUBSCRIPTION_TTL,
-                    EVENT_TTL,
+                    lambdaSubscription.getClaimTtl(),
+                    999,
+                    true,
                     delegateApiKey);
-                lastSubscribe.set(new DateTime());
-            }
 
-            final List<JsonNode> superSetPoll = dataBusClient.poll(
-                lambdaSubscription.getSubscriptionName(),
-                lambdaSubscription.getClaimTtl(),
-                lambdaConfiguration.getPollSize(),
-                true,
-                delegateApiKey);
-
-            final List<JsonNode> poll;
-            if (lambdaSubscription.getDocCondition() == null) {
-                poll = superSetPoll;
-            } else {
-                final Condition docCondition = DeltaParser.parseCondition(lambdaSubscription.getDocCondition());
-                final ImmutableList.Builder<JsonNode> toPoll = ImmutableList.builder();
-                final ImmutableList.Builder<String> toAck = ImmutableList.builder();
-                for (JsonNode node : superSetPoll) {
-                    if (ConditionEvaluator.eval(docCondition, JsonUtil.mapper().convertValue(node.get("content"), Object.class), null)) {
-                        toPoll.add(node);
-                    } else {
-                        toAck.add(node.get("eventKey").asText());
-                    }
+                if (superSetPoll.size() == 0) {
+                    // didn't get anything... go ahead and exit to reset the subscription state, etc.
+                    keepPolling = false;
                 }
-                final ImmutableList<String> acks = toAck.build();
-                if (!acks.isEmpty()) {
-                    final Timer.Context time = metricRegistrar.timer("emo_lambda_fanout.poll.filteredAckTime", tags).time();
-                    dataBusClient.acknowledge(lambdaSubscription.getSubscriptionName(), acks, delegateApiKey);
-                    time.stop();
-                }
-                metricRegistrar.counter("emo_lambda_fanout.poll.filtered", tags).inc(acks.size());
-                poll = toPoll.build();
-            }
 
-            metricRegistrar.counter("emo_lambda_fanout.poll.polled", tags).inc(poll.size());
-
-            metricRegistrar
-                .histogram("emo_lambda_fanout.poll.events", tags)
-                .update(poll.size());
-
-            LOG.info("Polled [{}] events for arn[{}]", poll.size(), lambdaSubscription.getLambdaArn());
-
-            for (List<JsonNode> batch : Lists.partition(poll, lambdaSubscription.getBatchSize())) {
-                final List<JsonNode> content = batch.stream().map(n -> n.get("content")).collect(Collectors.toList());
-                final List<String> eventKeys = batch.stream().map(n -> n.get("eventKey").asText()).collect(Collectors.toList());
-
-                processPool.submit(
-                    lambdaSubscription,
-                    content,
-                    () -> {
-                        final Timer.Context ackTimer = metricRegistrar.timer("emo_lambda_fanout.execution.ackTime", ImmutableMap.of()).time();
-                        dataBusClient.acknowledge(lambdaSubscription.getSubscriptionName(), eventKeys, delegateApiKey);
-                        ackTimer.stop();
+                final List<JsonNode> poll;
+                if (lambdaSubscription.getDocCondition() == null) {
+                    poll = superSetPoll;
+                } else {
+                    final Condition docCondition = DeltaParser.parseCondition(lambdaSubscription.getDocCondition());
+                    final ImmutableList.Builder<JsonNode> toPoll = ImmutableList.builder();
+                    final ImmutableList.Builder<String> toAck = ImmutableList.builder();
+                    for (JsonNode node : superSetPoll) {
+                        if (ConditionEvaluator.eval(docCondition, JsonUtil.mapper().convertValue(node.get("content"), Object.class), null)) {
+                            toPoll.add(node);
+                        } else {
+                            toAck.add(node.get("eventKey").asText());
+                        }
                     }
-                );
-            }
+                    final ImmutableList<String> acks = toAck.build();
+                    if (!acks.isEmpty()) {
+                        final Timer.Context time = metricRegistrar.timer("emo_lambda_fanout.poll.filteredAckTime", tags).time();
+                        dataBusClient.acknowledge(lambdaSubscription.getSubscriptionName(), acks, delegateApiKey);
+                        time.stop();
+                    }
+                    metricRegistrar.counter("emo_lambda_fanout.poll.filtered", tags).inc(acks.size());
+                    poll = toPoll.build();
+                }
 
-            lastPoll.set(new Date());
-        }
+                metricRegistrar.counter("emo_lambda_fanout.poll.polled", tags).inc(poll.size());
 
-        @Override protected void runOneIteration() throws Exception {
-            try {
-                innerRunOneIteration();
-            } catch (Exception e) {
-                LOG.error("Uncaught exception in runOneIteration.", e);
+                metricRegistrar
+                    .histogram("emo_lambda_fanout.poll.events", tags)
+                    .update(poll.size());
+
+                LOG.info("Polled [{}] events for arn[{}]", poll.size(), lambdaSubscription.getLambdaArn());
+
+                for (List<JsonNode> batch : Lists.partition(poll, lambdaSubscription.getBatchSize())) {
+                    final List<JsonNode> content = batch.stream().map(n -> n.get("content")).collect(Collectors.toList());
+                    final List<String> eventKeys = batch.stream().map(n -> n.get("eventKey").asText()).collect(Collectors.toList());
+
+                    processPool.submit(
+                        lambdaSubscription,
+                        content,
+                        () -> {
+                            final Timer.Context ackTimer = metricRegistrar.timer("emo_lambda_fanout.execution.ackTime", ImmutableMap.of()).time();
+                            dataBusClient.acknowledge(lambdaSubscription.getSubscriptionName(), eventKeys, delegateApiKey);
+                            ackTimer.stop();
+                        }
+                    );
+                }
+
+                lastPoll.set(new Date());
             }
         }
-
-        void start() { startAsync().awaitRunning(); }
-
-        void stop() { stopAsync().awaitTerminated(); }
     }
 }
 
