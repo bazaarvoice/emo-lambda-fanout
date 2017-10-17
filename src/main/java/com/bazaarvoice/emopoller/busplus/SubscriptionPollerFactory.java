@@ -132,7 +132,7 @@ public class SubscriptionPollerFactory {
 
         @Override protected void doStart() {
             // just execute the task again to add concurrency to the poller.
-            pollerPool.execute(task);
+            pollerPool.submit(task);
         }
 
         @Override protected void doStop() {
