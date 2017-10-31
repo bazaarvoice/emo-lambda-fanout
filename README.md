@@ -132,3 +132,5 @@ chat message, email, code checkin, etc., etc.
     * this gives you something like: `JkKamLdE4pR+g1KgaM+iC6e0YmvG8+CjxsOGvRAlxeF1MvlFTMyrwpvgDmjPuaDLzqRHghp/WNjGetioS1foDA==`.
 3. Add it to `poller.apiKeyDigestWhitelist` in `src/main/config/config/config.bazaar.yaml`
 4. Follow the release/deploy instructions to deploy a new generation of proxies that accept this key.
+
+
