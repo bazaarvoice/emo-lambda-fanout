@@ -285,13 +285,31 @@ public class SubscriptionPollerFactory {
                         content,
                         () -> {
                             final Timer.Context ackTimer = metricRegistrar.timer("emo_lambda_fanout.execution.ackTime", ImmutableMap.of()).time();
-                            dataBusClient.acknowledge(lambdaSubscription.getSubscriptionName(), eventKeys, delegateApiKey);
+                            for (int i = 1; i < 10; i++) {
+                                try {
+                                    dataBusClient.acknowledge(lambdaSubscription.getSubscriptionName(), eventKeys, delegateApiKey);
+                                    break;
+                                } catch (WebApplicationException e) {
+                                    if (e.getResponse().getStatus() == 503) {
+                                        LOG.info("Got 'service unavailable'. Retrying...");
+                                        sleepSeconds(i);
+                                    }
+                                }
+                            }
                             ackTimer.stop();
                         }
                     );
                 }
 
                 lastPoll.set(new Date());
+            }
+        }
+
+        private void sleepSeconds(final int i) {
+            try {
+                Thread.sleep(1000L * i);
+            } catch (InterruptedException e1) {
+                throw new RuntimeException(e1);
             }
         }
     }
