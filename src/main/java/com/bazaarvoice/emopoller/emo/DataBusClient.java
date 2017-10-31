@@ -52,19 +52,19 @@ public class DataBusClient {
         this.metricRegistrar = metricRegistrar;
     }
 
-    public JsonNode subscribe(final String subscriptionName,
-                          final Condition condition,
-                          final Duration subscriptionTTL,
-                          final Duration eventTTL,
-                          final String apiKey) {
+    @SuppressWarnings("UnusedReturnValue") public JsonNode subscribe(final String subscriptionName,
+                                                                     final Condition condition,
+                                                                     final Duration subscriptionTTL,
+                                                                     final Duration eventTTL,
+                                                                     final String apiKey) {
         return subscribe(subscriptionName, condition.toString(), subscriptionTTL, eventTTL, apiKey);
     }
 
     public JsonNode subscribe(final String subscriptionName,
-                          final String condition,
-                          final Duration subscriptionTTL,
-                          final Duration eventTTL,
-                          final String apiKey) {
+                              final String condition,
+                              final Duration subscriptionTTL,
+                              final Duration eventTTL,
+                              final String apiKey) {
         final Timer.Context time = metricRegistrar.timer("emo_lambda_fanout.databus.subscribe.time", ImmutableMap.of()).time();
         final URI uri = UriBuilder.fromUri(baseURL)
             .segment("bus", "1", subscriptionName)
@@ -94,63 +94,6 @@ public class DataBusClient {
         } finally {
             time.stop();
         }
-    }
-
-    public JsonNode getSubscription(final String subscriptionName,
-                                    final String apiKey) {
-        final Timer.Context time = metricRegistrar.timer("emo_lambda_fanout.databus.getSubscription.time", ImmutableMap.of()).time();
-        final URI uri = UriBuilder.fromUri(baseURL)
-            .segment("bus", "1", subscriptionName)
-            .queryParam("partitioned", false)
-            .build();
-
-        final Response response = responseOrThrow(client
-                .target(uri)
-                .request()
-                .accept(MediaType.APPLICATION_JSON_TYPE)
-                .header(APIKEY_AUTH_HEADER, apiKey)
-                .buildGet()
-                .invoke(),
-            (r, e) -> {
-                final String context = String.format("dataBus(%s).unsubscribe(%s)", uri, subscriptionName);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
-                time.stop();
-            }
-        );
-
-        try (InputStream is = response.readEntity(InputStream.class)) {
-            return JsonUtil.mapper().readTree(is);
-        } catch (IOException e) {
-            throw new RuntimeException(String.format("Unexpected error getting subscription [%s]", subscriptionName), e);
-        } finally {
-            time.stop();
-        }
-    }
-
-    public void unsubscribe(final String subscriptionName,
-                            final String apiKey) {
-        final Timer.Context time = metricRegistrar.timer("emo_lambda_fanout.databus.unsubscribe.time", ImmutableMap.of()).time();
-        final URI uri = UriBuilder.fromUri(baseURL)
-            .segment("bus", "1", subscriptionName)
-            .queryParam("partitioned", false)
-            .build();
-
-        final Response response = responseOrThrow(client
-                .target(uri)
-                .request()
-                .accept(MediaType.APPLICATION_JSON_TYPE)
-                .header(APIKEY_AUTH_HEADER, apiKey)
-                .buildDelete()
-                .invoke(),
-            (r, e) -> {
-                final String context = String.format("dataBus(%s).unsubscribe(%s)", uri, subscriptionName);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
-                time.stop();
-            }
-        );
-
-        consume(response.readEntity(InputStream.class));
-        time.stop();
     }
 
     public Integer size(final String subscriptionName,
@@ -208,7 +151,7 @@ public class DataBusClient {
                 .invoke(),
             (r, e) -> {
                 final String context = String.format("dataBus(%s).poll(%s, %s, %s)", uri, subscriptionName, claimTtl, limit);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
+                LOG.warn("[{}] Unexpected response status [{}]: {}. May retry...", context, r.getStatus(), e);
                 time.stop();
             }
         );
@@ -218,42 +161,6 @@ public class DataBusClient {
             return ImmutableList.copyOf(jsonNode.elements());
         } catch (IOException e) {
             throw new RuntimeException(String.format("Unexpected error polling [%s]", subscriptionName), e);
-        } finally {
-            time.stop();
-        }
-    }
-
-    public List<JsonNode> peek(final String subscriptionName,
-                               final int limit,
-                               final String apiKey) {
-        final Timer.Context time = metricRegistrar.timer("emo_lambda_fanout.databus.peek.time", ImmutableMap.of()).time();
-        final URI uri = UriBuilder.fromUri(baseURL)
-            .segment("bus", "1", subscriptionName, "peek")
-            .queryParam("limit", limit)
-            .queryParam("includeTags", true)
-            .queryParam("partitioned", false)
-            .queryParam("ignoreLongPoll", true)
-            .build();
-
-        final Response response = responseOrThrow(client
-                .target(uri)
-                .request()
-                .accept(MediaType.APPLICATION_JSON_TYPE)
-                .header(APIKEY_AUTH_HEADER, apiKey)
-                .buildGet()
-                .invoke(),
-            (r, e) -> {
-                final String context = String.format("dataBus(%s).peek(%s, %s)", uri, subscriptionName, limit);
-                LOG.warn("[{}] Unexpected response status [{}] from [{}]: {}. May retry...", context, r.getStatus(), r.getLocation(), e);
-                time.stop();
-            }
-        );
-
-        try (InputStream is = response.readEntity(InputStream.class)) {
-            final JsonNode jsonNode = JsonUtil.mapper().readTree(is);
-            return ImmutableList.copyOf(jsonNode.elements());
-        } catch (IOException e) {
-            throw new RuntimeException(String.format("Unexpected error peeking [%s]", subscriptionName), e);
         } finally {
             time.stop();
         }

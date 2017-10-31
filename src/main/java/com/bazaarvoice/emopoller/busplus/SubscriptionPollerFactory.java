@@ -25,6 +25,7 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.client.Client;
 import java.time.Duration;
 import java.util.Date;
@@ -219,12 +220,24 @@ public class SubscriptionPollerFactory {
                     lastSubscribe.set(new DateTime());
                 }
 
-                final List<JsonNode> superSetPoll = dataBusClient.poll(
-                    lambdaSubscription.getSubscriptionName(),
-                    lambdaSubscription.getClaimTtl(),
-                    999,
-                    true,
-                    delegateApiKey);
+                final List<JsonNode> superSetPoll;
+
+                try {
+                    superSetPoll = dataBusClient.poll(
+                        lambdaSubscription.getSubscriptionName(),
+                        lambdaSubscription.getClaimTtl(),
+                        999,
+                        true,
+                        delegateApiKey);
+                } catch (WebApplicationException e) {
+                    if (e.getResponse().getStatus() == 503) {
+                        LOG.info("Got 'service unavailable'. Taking a nap and re-trying...");
+                        Thread.sleep(1000);
+                        continue;
+                    } else {
+                        throw e;
+                    }
+                }
 
                 if (superSetPoll.size() == 0) {
                     // didn't get anything... go ahead and exit to reset the subscription state, etc.
