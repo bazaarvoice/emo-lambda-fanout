@@ -43,7 +43,6 @@ public class SubscriptionPollerFactory {
 
 
     private final LambdaSubscriptionDAO lambdaSubscriptionDAO;
-    private final EmoPollerConfiguration.LambdaConfiguration lambdaConfiguration;
     private final ApiKeyCrypto apiKeyCrypto;
     private final ProcessPool processPool;
     private final MetricRegistrar metricRegistrar;
@@ -60,7 +59,6 @@ public class SubscriptionPollerFactory {
                                      final MetricRegistrar metricRegistrar,
                                      final HealthCheckRegistry healthCheckRegistry) {
         this.lambdaSubscriptionDAO = lambdaSubscriptionDAO;
-        this.lambdaConfiguration = pollerConfiguration.getLambdaConfiguration();
         this.environmentConfigurations = pollerConfiguration.getEnvironmentConfigurations();
         this.apiKeyCrypto = apiKeyCrypto;
         this.processPool = processPool;
@@ -254,8 +252,10 @@ public class SubscriptionPollerFactory {
                     for (JsonNode node : superSetPoll) {
                         if (ConditionEvaluator.eval(docCondition, JsonUtil.mapper().convertValue(node.get("content"), Object.class), null)) {
                             toPoll.add(node);
+                            LOG.debug("[{}] Polled [{}/{}]", lambdaSubscription.getLambdaArn(), node.path("~table").textValue(), node.path("~id").textValue());
                         } else {
                             toAck.add(node.get("eventKey").asText());
+                            LOG.debug("[{}] Filtered [{}/{}]", lambdaSubscription.getLambdaArn(), node.path("~table").textValue(), node.path("~id").textValue());
                         }
                     }
                     final ImmutableList<String> acks = toAck.build();
